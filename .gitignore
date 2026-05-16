@@ -1,0 +1,15 @@
+# Mengabaikan folder node_modules secara keseluruhan
+node_modules/
+
+# Mengabaikan file rahasia bernama .env
+.env
+
+# Mengabaikan semua file yang memiliki ekstensi .log
+*.log
+
+# Mengabaikan folder build atau dist hasil compile
+/dist
+/build
+
+# Mengabaikan file media uji coba
+/media/hls/
