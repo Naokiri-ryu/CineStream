@@ -1,683 +1,807 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="id">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CineStream — Nonton</title>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.14/dist/hls.min.js"></script>
-<script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CineStream — Nonton</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.14/dist/hls.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
 
-  :root {
-    --bg:       #0f0f13;
-    --surface:  #1a1a24;
-    --surface2: #24243a;
-    --accent:   #7c6fe0;
-    --accent2:  #a78bfa;
-    --text:     #e8e8f0;
-    --muted:    #888899;
-    --border:   #2e2e44;
-    --success:  #1D9E75;
-    --danger:   #e24b4a;
-    --sidebar:  320px;
-  }
+      :root {
+        --bg: #0f0f13;
+        --surface: #1a1a24;
+        --surface2: #24243a;
+        --accent: #7c6fe0;
+        --accent2: #a78bfa;
+        --text: #e8e8f0;
+        --muted: #888899;
+        --border: #2e2e44;
+        --success: #1d9e75;
+        --danger: #e24b4a;
+        --sidebar: 320px;
+      }
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
 
-  /* ── Header ── */
-  header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 0 1.25rem;
-    height: 52px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-shrink: 0;
-  }
+      /* ── Header ── */
+      header {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        padding: 0 1.25rem;
+        height: 52px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-shrink: 0;
+      }
 
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--accent2);
-    text-decoration: none;
-  }
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--accent2);
+        text-decoration: none;
+      }
 
-  .logo-icon { font-size: 20px; }
+      .logo-icon {
+        font-size: 20px;
+      }
 
-  .header-right {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 13px;
-    color: var(--muted);
-  }
+      .header-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 13px;
+        color: var(--muted);
+      }
 
-  .room-code-badge {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 4px 12px;
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 2px;
-    color: var(--accent2);
-    display: none;
-  }
+      .room-code-badge {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 4px 12px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        color: var(--accent2);
+        display: none;
+      }
 
-  .host-badge {
-    background: rgba(124, 111, 224, 0.15);
-    border: 1px solid var(--accent);
-    border-radius: 20px;
-    padding: 3px 10px;
-    font-size: 12px;
-    color: var(--accent2);
-    display: none;
-  }
+      .host-badge {
+        background: rgba(124, 111, 224, 0.15);
+        border: 1px solid var(--accent);
+        border-radius: 20px;
+        padding: 3px 10px;
+        font-size: 12px;
+        color: var(--accent2);
+        display: none;
+      }
 
-  /* ── Layout Utama ── */
-  .main-layout {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-  }
+      /* ── Layout Utama ── */
+      .main-layout {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+      }
 
-  /* ── Area Video ── */
-  .video-area {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    background: #000;
-  }
+      /* ── Area Video ── */
+      .video-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        background: #000;
+      }
 
-  video {
-    width: 100%;
-    flex: 1;
-    min-height: 0;
-    display: block;
-    background: #000;
-  }
+      video {
+        width: 100%;
+        flex: 1;
+        min-height: 0;
+        display: block;
+        background: #000;
+      }
 
-  .video-info {
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    padding: 12px 1.25rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
+      .video-info {
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        padding: 12px 1.25rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
 
-  .film-title-bar {
-    font-size: 15px;
-    font-weight: 600;
-  }
+      .film-title-bar {
+        font-size: 15px;
+        font-weight: 600;
+      }
 
-  .sync-status {
-    font-size: 12px;
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
+      .sync-status {
+        font-size: 12px;
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
 
-  .sync-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--muted);
-  }
+      .sync-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--muted);
+      }
 
-  .sync-dot.connected { background: var(--success); }
+      .sync-dot.connected {
+        background: var(--success);
+      }
 
-  /* ── Sidebar ── */
-  .sidebar {
-    width: var(--sidebar);
-    flex-shrink: 0;
-    background: var(--surface);
-    border-left: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
+      /* ── Sidebar ── */
+      .sidebar {
+        width: var(--sidebar);
+        flex-shrink: 0;
+        background: var(--surface);
+        border-left: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
 
-  .sidebar-tabs {
-    display: flex;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
+      .sidebar-tabs {
+        display: flex;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+      }
 
-  .tab {
-    flex: 1;
-    padding: 12px;
-    text-align: center;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--muted);
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    transition: color 0.15s, border-color 0.15s;
-    user-select: none;
-  }
+      .tab {
+        flex: 1;
+        padding: 12px;
+        text-align: center;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition:
+          color 0.15s,
+          border-color 0.15s;
+        user-select: none;
+      }
 
-  .tab.active {
-    color: var(--accent2);
-    border-bottom-color: var(--accent);
-  }
+      .tab.active {
+        color: var(--accent2);
+        border-bottom-color: var(--accent);
+      }
 
-  .tab-panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
-  .tab-panel.active { display: flex; }
+      .tab-panel {
+        display: none;
+        flex: 1;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .tab-panel.active {
+        display: flex;
+      }
 
-  /* ── Panel Room ── */
-  .room-panel { padding: 1rem; gap: 12px; overflow-y: auto; }
+      /* ── Panel Room ── */
+      .room-panel {
+        padding: 1rem;
+        gap: 12px;
+        overflow-y: auto;
+      }
 
-  .room-info-card {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 14px;
-  }
+      .room-info-card {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px;
+      }
 
-  .room-info-card h3 {
-    font-size: 13px;
-    color: var(--muted);
-    margin-bottom: 8px;
-    font-weight: 500;
-  }
+      .room-info-card h3 {
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 8px;
+        font-weight: 500;
+      }
 
-  .room-code-big {
-    font-size: 2rem;
-    font-weight: 800;
-    letter-spacing: 6px;
-    color: var(--accent2);
-    margin-bottom: 8px;
-  }
+      .room-code-big {
+        font-size: 2rem;
+        font-weight: 800;
+        letter-spacing: 6px;
+        color: var(--accent2);
+        margin-bottom: 8px;
+      }
 
-  .share-hint { font-size: 12px; color: var(--muted); }
+      .share-hint {
+        font-size: 12px;
+        color: var(--muted);
+      }
 
-  .btn {
-    padding: 9px 16px;
-    border-radius: 8px;
-    border: none;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity 0.15s, transform 0.1s;
-    width: 100%;
-    text-align: center;
-  }
-  .btn:hover { opacity: 0.85; }
-  .btn:active { transform: scale(0.97); }
-  .btn-accent { background: var(--accent); color: #fff; }
-  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
-  .btn-danger  { background: rgba(226,75,74,0.15); border: 1px solid var(--danger); color: var(--danger); }
+      .btn {
+        padding: 9px 16px;
+        border-radius: 8px;
+        border: none;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+          opacity 0.15s,
+          transform 0.1s;
+        width: 100%;
+        text-align: center;
+      }
+      .btn:hover {
+        opacity: 0.85;
+      }
+      .btn:active {
+        transform: scale(0.97);
+      }
+      .btn-accent {
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn-outline {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text);
+      }
+      .btn-danger {
+        background: rgba(226, 75, 74, 0.15);
+        border: 1px solid var(--danger);
+        color: var(--danger);
+      }
 
-  .members-list { display: flex; flex-direction: column; gap: 8px; }
+      .members-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
 
-  .member-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 13px;
-  }
+      .member-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+      }
 
-  .member-avatar {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: var(--accent);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: 700;
-    flex-shrink: 0;
-  }
+      .member-avatar {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
 
-  /* ── Panel Chat ── */
-  .chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
+      /* ── Panel Chat ── */
+      .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
 
-  .chat-messages::-webkit-scrollbar { width: 4px; }
-  .chat-messages::-webkit-scrollbar-track { background: transparent; }
-  .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+      .chat-messages::-webkit-scrollbar {
+        width: 4px;
+      }
+      .chat-messages::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .chat-messages::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 2px;
+      }
 
-  .chat-msg { font-size: 13px; line-height: 1.5; }
+      .chat-msg {
+        font-size: 13px;
+        line-height: 1.5;
+      }
 
-  .chat-msg .sender {
-    font-weight: 600;
-    color: var(--accent2);
-    margin-right: 4px;
-  }
+      .chat-msg .sender {
+        font-weight: 600;
+        color: var(--accent2);
+        margin-right: 4px;
+      }
 
-  .chat-msg.system {
-    color: var(--muted);
-    font-style: italic;
-    font-size: 12px;
-    text-align: center;
-  }
+      .chat-msg.system {
+        color: var(--muted);
+        font-style: italic;
+        font-size: 12px;
+        text-align: center;
+      }
 
-  .chat-input-area {
-    border-top: 1px solid var(--border);
-    padding: 10px 12px;
-    display: flex;
-    gap: 8px;
-    flex-shrink: 0;
-  }
+      .chat-input-area {
+        border-top: 1px solid var(--border);
+        padding: 10px 12px;
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
+      }
 
-  .chat-input {
-    flex: 1;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 9px 12px;
-    color: var(--text);
-    font-size: 13px;
-    outline: none;
-    transition: border-color 0.15s;
-  }
-  .chat-input:focus { border-color: var(--accent); }
+      .chat-input {
+        flex: 1;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 9px 12px;
+        color: var(--text);
+        font-size: 13px;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      .chat-input:focus {
+        border-color: var(--accent);
+      }
 
-  .btn-send {
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    padding: 9px 14px;
-    font-size: 14px;
-    cursor: pointer;
-    transition: opacity 0.15s;
-  }
-  .btn-send:hover { opacity: 0.85; }
+      .btn-send {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        padding: 9px 14px;
+        font-size: 14px;
+        cursor: pointer;
+        transition: opacity 0.15s;
+      }
+      .btn-send:hover {
+        opacity: 0.85;
+      }
 
-  /* ── Setup overlay (nama user) ── */
-  .setup-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.85);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 999;
-  }
+      /* ── Setup overlay (nama user) ── */
+      .setup-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.85);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 999;
+      }
 
-  .setup-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 2rem;
-    width: 360px;
-    max-width: 90vw;
-  }
+      .setup-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 2rem;
+        width: 360px;
+        max-width: 90vw;
+      }
 
-  .setup-card h2 { font-size: 1.1rem; margin-bottom: 1rem; }
+      .setup-card h2 {
+        font-size: 1.1rem;
+        margin-bottom: 1rem;
+      }
 
-  .form-label { font-size: 13px; color: var(--muted); margin-bottom: 6px; display: block; }
+      .form-label {
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 6px;
+        display: block;
+      }
 
-  .form-input {
-    width: 100%;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 14px;
-    color: var(--text);
-    font-size: 14px;
-    outline: none;
-    margin-bottom: 12px;
-    transition: border-color 0.15s;
-  }
+      .form-input {
+        width: 100%;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 14px;
+        color: var(--text);
+        font-size: 14px;
+        outline: none;
+        margin-bottom: 12px;
+        transition: border-color 0.15s;
+      }
 
-  .form-input:focus { border-color: var(--accent); }
-</style>
-</head>
-<body>
-
-<header>
-  <a class="logo" href="/">
-    <span class="logo-icon">▶</span> CineStream
-  </a>
-  <div class="header-right">
-    <span class="host-badge" id="host-badge">👑 Host</span>
-    <span id="room-code-badge" class="room-code-badge"></span>
-    <span id="header-username" style="font-weight:600;"></span>
-  </div>
-</header>
-
-<div class="main-layout">
-
-  <!-- Area Video -->
-  <div class="video-area">
-    <video id="video" controls preload="metadata"></video>
-    <div class="video-info">
-      <span class="film-title-bar" id="film-title-bar">Memuat...</span>
-      <div class="sync-status">
-        <div class="sync-dot" id="sync-dot"></div>
-        <span id="sync-label">Tidak terhubung</span>
+      .form-input:focus {
+        border-color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a class="logo" href="/"> <span class="logo-icon">▶</span> CineStream </a>
+      <div class="header-right">
+        <span class="host-badge" id="host-badge">👑 Host</span>
+        <span id="room-code-badge" class="room-code-badge"></span>
+        <span id="header-username" style="font-weight: 600"></span>
       </div>
-    </div>
-  </div>
+    </header>
 
-  <!-- Sidebar -->
-  <div class="sidebar">
-    <div class="sidebar-tabs">
-      <div class="tab active" onclick="switchTab('room')">Room</div>
-      <div class="tab" onclick="switchTab('chat')">Chat</div>
-    </div>
-
-    <!-- Tab Room -->
-    <div class="tab-panel active room-panel" id="tab-room">
-
-      <div class="room-info-card" id="room-code-card" style="display:none;">
-        <h3>Kode Room</h3>
-        <div class="room-code-big" id="room-code-display">—</div>
-        <div class="share-hint">Bagikan kode ini ke teman-temanmu</div>
-        <br>
-        <button class="btn btn-outline" onclick="copyRoomCode()" style="margin-top:4px;">📋 Salin Kode</button>
-      </div>
-
-      <div class="room-info-card" id="members-card">
-        <h3>Penonton</h3>
-        <div class="members-list" id="members-list">
-          <div style="font-size:13px;color:var(--muted);">Belum ada anggota</div>
+    <div class="main-layout">
+      <!-- Area Video -->
+      <div class="video-area">
+        <video id="video" controls preload="metadata"></video>
+        <div class="video-info">
+          <span class="film-title-bar" id="film-title-bar">Memuat...</span>
+          <div class="sync-status">
+            <div class="sync-dot" id="sync-dot"></div>
+            <span id="sync-label">Tidak terhubung</span>
+          </div>
         </div>
       </div>
 
-      <button class="btn btn-danger" onclick="leaveRoom()">Tinggalkan Room</button>
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-tabs">
+          <div class="tab active" onclick="switchTab('room')">Room</div>
+          <div class="tab" onclick="switchTab('chat')">Chat</div>
+        </div>
 
+        <!-- Tab Room -->
+        <div class="tab-panel active room-panel" id="tab-room">
+          <div class="room-info-card" id="room-code-card" style="display: none">
+            <h3>Kode Room</h3>
+            <div class="room-code-big" id="room-code-display">—</div>
+            <div class="share-hint">Bagikan kode ini ke teman-temanmu</div>
+            <br />
+            <button
+              class="btn btn-outline"
+              onclick="copyRoomCode()"
+              style="margin-top: 4px"
+            >
+              📋 Salin Kode
+            </button>
+          </div>
+
+          <div class="room-info-card" id="members-card">
+            <h3>Penonton</h3>
+            <div class="members-list" id="members-list">
+              <div style="font-size: 13px; color: var(--muted)">
+                Belum ada anggota
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-danger" onclick="leaveRoom()">
+            Tinggalkan Room
+          </button>
+        </div>
+
+        <!-- Tab Chat -->
+        <div class="tab-panel" id="tab-chat">
+          <div class="chat-messages" id="chat-messages">
+            <div class="chat-msg system">
+              Chat room aktif. Selamat menonton!
+            </div>
+          </div>
+          <div class="chat-input-area">
+            <input
+              class="chat-input"
+              type="text"
+              id="chat-input"
+              placeholder="Ketik pesan..."
+              maxlength="500"
+              onkeydown="if (event.key === 'Enter') sendChat();"
+            />
+            <button class="btn-send" onclick="sendChat()">➤</button>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Tab Chat -->
-    <div class="tab-panel" id="tab-chat">
-      <div class="chat-messages" id="chat-messages">
-        <div class="chat-msg system">Chat room aktif. Selamat menonton!</div>
-      </div>
-      <div class="chat-input-area">
-        <input class="chat-input" type="text" id="chat-input"
-               placeholder="Ketik pesan..." maxlength="500"
-               onkeydown="if(event.key==='Enter') sendChat()">
-        <button class="btn-send" onclick="sendChat()">➤</button>
+    <!-- Setup nama -->
+    <div class="setup-overlay" id="setup-overlay">
+      <div class="setup-card">
+        <h2 id="setup-title">👋 Masuk ke Room</h2>
+        <label class="form-label">Nama kamu</label>
+        <input
+          class="form-input"
+          type="text"
+          id="setup-name"
+          placeholder="Masukkan namamu"
+          maxlength="30"
+        />
+        <button
+          class="btn btn-accent"
+          onclick="startSession()"
+          style="margin-top: 4px"
+        >
+          Masuk →
+        </button>
       </div>
     </div>
-  </div>
-</div>
 
-<!-- Setup nama -->
-<div class="setup-overlay" id="setup-overlay">
-  <div class="setup-card">
-    <h2 id="setup-title">👋 Masuk ke Room</h2>
-    <label class="form-label">Nama kamu</label>
-    <input class="form-input" type="text" id="setup-name" placeholder="Masukkan namamu" maxlength="30">
-    <button class="btn btn-accent" onclick="startSession()" style="margin-top:4px;">Masuk →</button>
-  </div>
-</div>
+    <script>
+      // ── Parsing URL params ─────────────────────────────────────────────────────
+      const params = new URLSearchParams(location.search);
+      const ROOM = (params.get("room") || "").toUpperCase();
+      const IS_HOST = params.get("host") === "1";
+      const FILM_ID = params.get("film");
+      const URL_NAME = params.get("name") || "";
 
-<script>
-// ── Parsing URL params ─────────────────────────────────────────────────────
-const params   = new URLSearchParams(location.search);
-const ROOM     = (params.get('room') || '').toUpperCase();
-const IS_HOST  = params.get('host') === '1';
-const FILM_ID  = params.get('film');
-const URL_NAME = params.get('name') || '';
+      let username = "";
+      let socket = null;
+      let members = [];
+      let hlsPlayer = null;
 
-let username  = '';
-let socket    = null;
-let members   = [];
-let hlsPlayer = null;
-
-// ── Setup awal ──────────────────────────────────────────────────────────────
-window.addEventListener('load', () => {
-  if (URL_NAME) {
-    document.getElementById('setup-name').value = URL_NAME;
-    startSession();
-  } else {
-    document.getElementById('setup-overlay').style.display = 'flex';
-  }
-});
-
-function startSession() {
-  const nameInput = document.getElementById('setup-name').value.trim();
-  if (!nameInput) return;
-  username = nameInput;
-
-  document.getElementById('setup-overlay').style.display = 'none';
-  document.getElementById('header-username').textContent = username;
-
-  if (IS_HOST) document.getElementById('host-badge').style.display = 'inline';
-
-  initSocket();
-  loadContent();
-}
-
-// ── Socket.IO ───────────────────────────────────────────────────────────────
-function initSocket() {
-  socket = io({ transports: ['websocket'] });
-
-  socket.on('connect', () => {
-    setSyncStatus(true, ROOM ? 'Terhubung ke room' : 'Terhubung');
-
-    if (ROOM) {
-      socket.emit('join_room', {
-        room_code: ROOM,
-        username:  username,
-        is_host:   IS_HOST,
+      // ── Setup awal ──────────────────────────────────────────────────────────────
+      window.addEventListener("load", () => {
+        if (URL_NAME) {
+          document.getElementById("setup-name").value = URL_NAME;
+          startSession();
+        } else {
+          document.getElementById("setup-overlay").style.display = "flex";
+        }
       });
-    }
-  });
 
-  socket.on('disconnect', () => setSyncStatus(false, 'Terputus'));
+      function startSession() {
+        const nameInput = document.getElementById("setup-name").value.trim();
+        if (!nameInput) return;
+        username = nameInput;
 
-  // Pesan sistem (join/leave)
-  socket.on('system_message', data => {
-    addSystemMsg(data.message);
-    // Update members list (simplified)
-  });
+        document.getElementById("setup-overlay").style.display = "none";
+        document.getElementById("header-username").textContent = username;
 
-  // Chat
-  socket.on('chat_message', data => {
-    addChatMsg(data.username, data.message);
-  });
+        if (IS_HOST)
+          document.getElementById("host-badge").style.display = "inline";
 
-  // Sinkronisasi dari host
-  socket.on('video_play', data => {
-    if (!IS_HOST) {
-      const video = document.getElementById('video');
-      const lag = (Date.now() / 1000) - data.server_time;
-      video.currentTime = data.current_time + lag;
-      video.play();
-    }
-  });
+        initSocket();
+        loadContent();
+      }
 
-  socket.on('video_pause', data => {
-    if (!IS_HOST) {
-      const video = document.getElementById('video');
-      video.currentTime = data.current_time;
-      video.pause();
-    }
-  });
+      // ── Socket.IO ───────────────────────────────────────────────────────────────
+      function initSocket() {
+        socket = io("http://localhost:8080", { transports: ["websocket"] });
 
-  socket.on('video_seek', data => {
-    if (!IS_HOST) {
-      document.getElementById('video').currentTime = data.current_time;
-    }
-  });
+        socket.on("connect", () => {
+          setSyncStatus(true, ROOM ? "Terhubung ke room" : "Terhubung");
 
-  // State saat pertama join (bukan host)
-  socket.on('sync_state', data => {
-    if (!IS_HOST) {
-      const video = document.getElementById('video');
-      video.currentTime = data.current_time || 0;
-      if (data.is_playing) video.play(); else video.pause();
-    }
-  });
-}
+          if (ROOM) {
+            socket.emit("join_room", {
+              room_code: ROOM,
+              username: username,
+              is_host: IS_HOST,
+            });
+          }
+        });
 
-// ── Load konten (film atau room) ────────────────────────────────────────────
-async function loadContent() {
-  if (ROOM) {
-    await loadRoom();
-  } else if (FILM_ID) {
-    await loadFilm(FILM_ID);
-  }
-}
+        socket.on("disconnect", () => setSyncStatus(false, "Terputus"));
 
-async function loadRoom() {
-  try {
-    const res  = await fetch(`/api/rooms/${ROOM}`);
-    if (!res.ok) { alert('Room tidak ditemukan.'); return; }
-    const room = await res.json();
+        // Pesan sistem (join/leave)
+        socket.on("system_message", (data) => {
+          addSystemMsg(data.message);
+          // Update members list (simplified)
+        });
 
-    document.getElementById('film-title-bar').textContent    = room.film_title;
-    document.getElementById('room-code-display').textContent = ROOM;
-    document.getElementById('room-code-badge').textContent   = ROOM;
-    document.getElementById('room-code-badge').style.display = 'inline';
-    document.getElementById('room-code-card').style.display  = 'block';
-    document.title = `${room.film_title} — CineStream`;
+        // Chat
+        socket.on("chat_message", (data) => {
+          addChatMsg(data.username, data.message);
+        });
 
-    initVideo(`/media/hls/${room.hls_path}`);
-    setupVideoSync();
-  } catch (e) {
-    console.error(e);
-    alert('Gagal memuat room.');
-  }
-}
+        // Sinkronisasi dari host
+        socket.on("video_play", (data) => {
+          if (!IS_HOST) {
+            const video = document.getElementById("video");
+            const lag = Date.now() / 1000 - data.server_time;
+            video.currentTime = data.current_time + lag;
+            video.play();
+          }
+        });
 
-async function loadFilm(filmId) {
-  try {
-    const res  = await fetch(`/api/films/${filmId}`);
-    if (!res.ok) { alert('Film tidak ditemukan.'); return; }
-    const film = await res.json();
+        socket.on("video_pause", (data) => {
+          if (!IS_HOST) {
+            const video = document.getElementById("video");
+            video.currentTime = data.current_time;
+            video.pause();
+          }
+        });
 
-    document.getElementById('film-title-bar').textContent = film.title;
-    document.title = `${film.title} — CineStream`;
+        socket.on("video_seek", (data) => {
+          if (!IS_HOST) {
+            document.getElementById("video").currentTime = data.current_time;
+          }
+        });
 
-    initVideo(`/media/hls/${film.hls_path}`);
-  } catch (e) {
-    console.error(e);
-  }
-}
+        // State saat pertama join (bukan host)
+        socket.on("sync_state", (data) => {
+          if (!IS_HOST) {
+            const video = document.getElementById("video");
+            video.currentTime = data.current_time || 0;
+            if (data.is_playing) video.play();
+            else video.pause();
+          }
+        });
+      }
 
-// ── HLS Player ──────────────────────────────────────────────────────────────
-function initVideo(hlsUrl) {
-  const video = document.getElementById('video');
-  if (Hls.isSupported()) {
-    hlsPlayer = new Hls({ enableWorker: true });
-    hlsPlayer.loadSource(hlsUrl);
-    hlsPlayer.attachMedia(video);
-    hlsPlayer.on(Hls.Events.ERROR, (e, data) => {
-      if (data.fatal) console.error('HLS fatal error:', data);
-    });
-  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = hlsUrl;
-  } else {
-    alert('Browser tidak mendukung HLS. Gunakan Chrome atau Firefox.');
-  }
-}
+      // ── Load konten (film atau room) ────────────────────────────────────────────
+      async function loadContent() {
+        if (ROOM) {
+          await loadRoom();
+        } else if (FILM_ID) {
+          await loadFilm(FILM_ID);
+        }
+      }
 
-// Kirim event kontrol video ke socket (hanya host)
-function setupVideoSync() {
-  if (!IS_HOST || !ROOM) return;
+      async function loadRoom() {
+        try {
+          const res = await fetch(`/api/rooms/${ROOM}`);
+          if (!res.ok) {
+            alert("Room tidak ditemukan.");
+            return;
+          }
+          const room = await res.json();
 
-  const video = document.getElementById('video');
+          document.getElementById("film-title-bar").textContent =
+            room.film_title;
+          document.getElementById("room-code-display").textContent = ROOM;
+          document.getElementById("room-code-badge").textContent = ROOM;
+          document.getElementById("room-code-badge").style.display = "inline";
+          document.getElementById("room-code-card").style.display = "block";
+          document.title = `${room.film_title} — CineStream`;
 
-  video.addEventListener('play', () => {
-    socket.emit('video_play', { room_code: ROOM, current_time: video.currentTime });
-  });
+          initVideo(`/media/hls/${room.hls_path}`);
+          setupVideoSync();
+        } catch (e) {
+          console.error(e);
+          alert("Gagal memuat room.");
+        }
+      }
 
-  video.addEventListener('pause', () => {
-    socket.emit('video_pause', { room_code: ROOM, current_time: video.currentTime });
-  });
+      async function loadFilm(filmId) {
+        try {
+          const res = await fetch(`/api/films/${filmId}`);
+          if (!res.ok) {
+            alert("Film tidak ditemukan.");
+            return;
+          }
+          const film = await res.json();
 
-  // Seek: deteksi dari selisih currentTime yang besar
-  let lastTime = 0;
-  video.addEventListener('timeupdate', () => {
-    if (Math.abs(video.currentTime - lastTime) > 2) {
-      socket.emit('video_seek', { room_code: ROOM, current_time: video.currentTime });
-    }
-    lastTime = video.currentTime;
-  });
-}
+          document.getElementById("film-title-bar").textContent = film.title;
+          document.title = `${film.title} — CineStream`;
 
-// ── Chat ────────────────────────────────────────────────────────────────────
-function sendChat() {
-  const input = document.getElementById('chat-input');
-  const msg   = input.value.trim();
-  if (!msg || !socket || !ROOM) return;
+          initVideo(`/media/hls/${film.hls_path}`);
+        } catch (e) {
+          console.error(e);
+        }
+      }
 
-  socket.emit('chat_message', { room_code: ROOM, username, message: msg });
-  addChatMsg(username, msg, true);
-  input.value = '';
-}
+      // ── HLS Player ──────────────────────────────────────────────────────────────
+      function initVideo(hlsUrl) {
+        const video = document.getElementById("video");
+        if (Hls.isSupported()) {
+          hlsPlayer = new Hls({ enableWorker: true });
+          hlsPlayer.loadSource(hlsUrl);
+          hlsPlayer.attachMedia(video);
+          hlsPlayer.on(Hls.Events.ERROR, (e, data) => {
+            if (data.fatal) console.error("HLS fatal error:", data);
+          });
+        } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          video.src = hlsUrl;
+        } else {
+          alert("Browser tidak mendukung HLS. Gunakan Chrome atau Firefox.");
+        }
+      }
 
-function addChatMsg(sender, message, isSelf = false) {
-  const box = document.getElementById('chat-messages');
-  const el  = document.createElement('div');
-  el.className = 'chat-msg';
-  el.innerHTML = `<span class="sender" style="${isSelf ? 'color:#1D9E75' : ''}">${escHtml(sender)}</span>${escHtml(message)}`;
-  box.appendChild(el);
-  box.scrollTop = box.scrollHeight;
-  switchTab('chat'); // fokus ke tab chat saat ada pesan baru
-}
+      // Kirim event kontrol video ke socket (hanya host)
+      function setupVideoSync() {
+        if (!IS_HOST || !ROOM) return;
 
-function addSystemMsg(message) {
-  const box = document.getElementById('chat-messages');
-  const el  = document.createElement('div');
-  el.className = 'chat-msg system';
-  el.textContent = message;
-  box.appendChild(el);
-  box.scrollTop = box.scrollHeight;
-}
+        const video = document.getElementById("video");
 
-// ── UI helpers ───────────────────────────────────────────────────────────────
-function switchTab(name) {
-  document.querySelectorAll('.tab').forEach((t, i) => {
-    const panels = ['room', 'chat'];
-    t.classList.toggle('active', panels[i] === name);
-  });
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.getElementById(`tab-${name}`).classList.add('active');
-}
+        video.addEventListener("play", () => {
+          socket.emit("video_play", {
+            room_code: ROOM,
+            current_time: video.currentTime,
+          });
+        });
 
-function setSyncStatus(connected, label) {
-  document.getElementById('sync-dot').classList.toggle('connected', connected);
-  document.getElementById('sync-label').textContent = label;
-}
+        video.addEventListener("pause", () => {
+          socket.emit("video_pause", {
+            room_code: ROOM,
+            current_time: video.currentTime,
+          });
+        });
 
-function copyRoomCode() {
-  navigator.clipboard.writeText(ROOM).then(() => {
-    const btn = event.target;
-    btn.textContent = '✅ Tersalin!';
-    setTimeout(() => btn.textContent = '📋 Salin Kode', 2000);
-  });
-}
+        // Seek: deteksi dari selisih currentTime yang besar
+        let lastTime = 0;
+        video.addEventListener("timeupdate", () => {
+          if (Math.abs(video.currentTime - lastTime) > 2) {
+            socket.emit("video_seek", {
+              room_code: ROOM,
+              current_time: video.currentTime,
+            });
+          }
+          lastTime = video.currentTime;
+        });
+      }
 
-function leaveRoom() {
-  if (socket && ROOM) {
-    socket.emit('leave_room', { room_code: ROOM, username });
-  }
-  window.location.href = '/';
-}
+      // ── Chat ────────────────────────────────────────────────────────────────────
+      function sendChat() {
+        const input = document.getElementById("chat-input");
+        const msg = input.value.trim();
+        if (!msg || !socket || !ROOM) return;
 
-function escHtml(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-</script>
-</body>
+        socket.emit("chat_message", {
+          room_code: ROOM,
+          username,
+          message: msg,
+        });
+        addChatMsg(username, msg, true);
+        input.value = "";
+      }
+
+      function addChatMsg(sender, message, isSelf = false) {
+        const box = document.getElementById("chat-messages");
+        const el = document.createElement("div");
+        el.className = "chat-msg";
+        el.innerHTML = `<span class="sender" style="${isSelf ? "color:#1D9E75" : ""}">${escHtml(sender)}</span>${escHtml(message)}`;
+        box.appendChild(el);
+        box.scrollTop = box.scrollHeight;
+        switchTab("chat"); // fokus ke tab chat saat ada pesan baru
+      }
+
+      function addSystemMsg(message) {
+        const box = document.getElementById("chat-messages");
+        const el = document.createElement("div");
+        el.className = "chat-msg system";
+        el.textContent = message;
+        box.appendChild(el);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      // ── UI helpers ───────────────────────────────────────────────────────────────
+      function switchTab(name) {
+        document.querySelectorAll(".tab").forEach((t, i) => {
+          const panels = ["room", "chat"];
+          t.classList.toggle("active", panels[i] === name);
+        });
+        document
+          .querySelectorAll(".tab-panel")
+          .forEach((p) => p.classList.remove("active"));
+        document.getElementById(`tab-${name}`).classList.add("active");
+      }
+
+      function setSyncStatus(connected, label) {
+        document
+          .getElementById("sync-dot")
+          .classList.toggle("connected", connected);
+        document.getElementById("sync-label").textContent = label;
+      }
+
+      function copyRoomCode() {
+        navigator.clipboard.writeText(ROOM).then(() => {
+          const btn = event.target;
+          btn.textContent = "✅ Tersalin!";
+          setTimeout(() => (btn.textContent = "📋 Salin Kode"), 2000);
+        });
+      }
+
+      function leaveRoom() {
+        if (socket && ROOM) {
+          socket.emit("leave_room", { room_code: ROOM, username });
+        }
+        window.location.href = "/";
+      }
+
+      function escHtml(str) {
+        return str
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+    </script>
+  </body>
 </html>
