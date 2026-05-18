@@ -417,6 +417,48 @@
       .form-input:focus {
         border-color: var(--accent);
       }
+      /* ── Responsive Mobile CSS untuk watch.html ── */
+      @media (max-width: 768px) {
+        body {
+          height: auto;
+          overflow: auto; /* Mengizinkan scroll ke bawah pada HP */
+        }
+        header {
+          padding: 10px;
+          height: auto;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        .header-right {
+          flex-wrap: wrap;
+          justify-content: flex-start;
+          width: 100%;
+        }
+        .main-layout {
+          flex-direction: column; /* Mengubah susunan menyamping jadi atas-bawah */
+          height: auto;
+        }
+        .video-area {
+          flex: none;
+          width: 100%;
+          height: auto;
+        }
+        video {
+          height: 30vh; /* Mengatur tinggi video agar pas di layar HP */
+          min-height: 250px;
+        }
+        .sidebar {
+          width: 100%; /* Sidebar memanjang penuh */
+          height: 55vh; /* Menyediakan ruang untuk area chat */
+          border-left: none;
+          border-top: 1px solid var(--border);
+        }
+        .video-info {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 10px;
+        }
+      }
     </style>
   </head>
   <body>
