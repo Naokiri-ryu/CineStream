@@ -1,0 +1,567 @@
+/* ── Reset & Variabel Global (Mode Gelap Default) ── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #0a0b10;
+  --surface: #161823;
+  --surface2: #222534;
+  --accent: #ff0043; /* Merah Cerah ala Blockbuster */
+  --accent2: #ff3366;
+  --text: #e8e8f0;
+  --muted: #888899;
+  --border: #2a2d3e;
+  --radius: 8px;
+}
+
+/* ── Mode Terang (Light Mode) ── */
+[data-theme="light"] {
+  --bg: #f4f7f6;
+  --surface: #ffffff;
+  --surface2: #e2e8f0;
+  --text: #1a202c;
+  --muted: #718096;
+  --border: #cbd5e0;
+  --accent: #e6003c;
+  --accent2: #ff1a53;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overflow-x: hidden;
+  transition:
+    background 0.3s,
+    color 0.3s;
+}
+
+/* ── Navbar Transparan ── */
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 70px;
+  padding: 0 4%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.8) 0%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  z-index: 1000;
+  transition: all 0.3s ease;
+}
+.navbar.scrolled {
+  background: var(--surface);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid var(--border);
+}
+[data-theme="light"] .navbar {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+[data-theme="light"] .navbar.scrolled {
+  background: var(--surface);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text);
+  text-decoration: none;
+  letter-spacing: 1px;
+}
+.logo-icon {
+  color: var(--accent);
+}
+.nav-links {
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+}
+.nav-links a {
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  transition: 0.2s;
+}
+.nav-links a:hover,
+.nav-links a.active {
+  color: var(--accent);
+}
+
+/* Tombol Toggle Theme */
+.theme-toggle {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: 0.3s;
+}
+.theme-toggle:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.search-container {
+  display: none;
+}
+.search-container.show {
+  display: block;
+  position: absolute;
+  top: 70px;
+  right: 4%;
+  background: var(--surface);
+  padding: 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+.search-container input {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  border-radius: 4px;
+  outline: none;
+  width: 250px;
+}
+
+/* ── Hero Carousel ── */
+.hero {
+  position: relative;
+  height: 85vh;
+  width: 100%;
+  background-color: #000;
+  background-size: cover;
+  background-position: center top;
+  transition: background-image 0.5s ease-in-out;
+}
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      to right,
+      var(--bg) 0%,
+      rgba(10, 11, 16, 0.4) 50%,
+      rgba(0, 0, 0, 0) 100%
+    ),
+    linear-gradient(to top, var(--bg) 0%, rgba(0, 0, 0, 0) 30%);
+}
+[data-theme="light"] .hero-overlay {
+  background:
+    linear-gradient(
+      to right,
+      var(--bg) 0%,
+      rgba(244, 247, 246, 0.6) 50%,
+      rgba(255, 255, 255, 0) 100%
+    ),
+    linear-gradient(to top, var(--bg) 0%, rgba(255, 255, 255, 0) 30%);
+}
+
+.hero-content {
+  position: absolute;
+  top: 50%;
+  left: 4%;
+  transform: translateY(-50%);
+  z-index: 10;
+  max-width: 600px;
+}
+.hero-badge {
+  background: var(--accent);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  margin-bottom: 15px;
+  display: inline-block;
+}
+.hero-title {
+  font-size: 3.5rem;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 15px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+  color: var(--text);
+}
+.hero-meta {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 25px;
+  display: flex;
+  gap: 15px;
+  font-weight: 500;
+}
+
+.hero-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 20px;
+  padding: 15px;
+  cursor: pointer;
+  z-index: 20;
+  border-radius: 50%;
+  transition: 0.2s;
+}
+.hero-nav:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.hero-nav.left {
+  left: 2%;
+}
+.hero-nav.right {
+  right: 2%;
+}
+
+/* ── Horizontal Scroll Movies (Poster Vertikal) ── */
+main {
+  padding: 2rem 0 4rem 4%;
+  margin-top: -80px;
+  position: relative;
+  z-index: 5;
+}
+.section-title {
+  font-size: 1.2rem;
+  margin-bottom: 1.5rem;
+  border-left: 4px solid var(--accent);
+  padding-left: 10px;
+  font-weight: 700;
+}
+
+/* ── Grid Layout Movies ── */
+.film-grid {
+  display: grid;
+  /* Akan otomatis membuat kolom sebanyak mungkin dengan minimal lebar 160px */
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1.5rem;
+}
+
+.film-card {
+  width: 100%;
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--border);
+}
+
+.film-poster {
+  width: 100%;
+  aspect-ratio: 2/3;
+  object-fit: cover;
+  border-bottom: 1px solid var(--border);
+}
+.film-info {
+  padding: 12px;
+}
+.film-title {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 5px;
+}
+.film-genre-text {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Hover Overlay untuk Tombol di Poster */
+.film-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  opacity: 0;
+  transition: 0.3s;
+  padding: 20px;
+}
+.film-card:hover .film-overlay {
+  opacity: 1;
+}
+.film-overlay .btn {
+  width: 100%;
+  text-align: center;
+  justify-content: center;
+  font-size: 12px;
+  padding: 8px;
+}
+
+/* ── Room Aktif Card ── */
+.room-card {
+  background: linear-gradient(135deg, var(--surface2), var(--surface));
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 15px;
+  box-shadow: 0 4px 15px rgba(255, 0, 67, 0.2);
+}
+.room-card-title {
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 10px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.room-card-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 15px;
+}
+
+/* ── Mobile Responsive Navbar ── */
+.mobile-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 24px;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .nav-links {
+    display: none;
+    flex-direction: column;
+    position: absolute;
+    top: 70px;
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+    gap: 15px;
+  }
+  .nav-links.show {
+    display: flex;
+  }
+  .mobile-toggle {
+    display: block;
+  }
+
+  .hero-title {
+    font-size: 2rem;
+  }
+  .hero-meta {
+    flex-direction: column;
+    gap: 5px;
+  }
+  .hero-content {
+    left: 5%;
+    right: 5%;
+  }
+
+  /* Supaya di HP overlay tombol langsung muncul sedikit / bisa diklik */
+  .film-overlay {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.6);
+    top: auto;
+    height: 50%;
+    justify-content: flex-end;
+  }
+}
+/* Perubahan: Aspect Ratio Poster menjadi Vertikal 2:3 */
+.film-poster {
+  width: 100%;
+  aspect-ratio: 2/3;
+  object-fit: cover;
+  border-bottom: 1px solid var(--border);
+}
+.film-info {
+  padding: 12px;
+}
+.film-title {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 5px;
+}
+.film-genre-text {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── Tombol Umum & Modal ── */
+.btn {
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: 0.2s;
+}
+.btn-accent {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-outline {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-accent:hover {
+  background: var(--accent2);
+}
+.btn-outline:hover {
+  background: var(--border);
+}
+
+/* Modal disamakan dengan tema */
+.modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(5px);
+}
+.modal-backdrop.open {
+  display: flex;
+}
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2rem;
+  width: 400px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+.modal-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 10px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+}
+.modal-form {
+  display: none;
+}
+.modal-form.active {
+  display: block;
+}
+.form-group {
+  margin-bottom: 15px;
+}
+.form-input {
+  width: 100%;
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: var(--accent);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: 0.3s;
+  z-index: 3000;
+  font-weight: 600;
+}
+.toast.show {
+  opacity: 1;
+}
+
+/* ── UI Daftar Penonton ── */
+.user-list {
+  list-style: none;
+  margin-top: 10px;
+  max-height: 150px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.user-list li {
+  padding: 10px;
+  background: var(--surface2);
+  margin-bottom: 5px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.user-list li.host::after {
+  content: "HOST";
+  font-size: 9px;
+  background: var(--accent);
+  color: white;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-weight: bold;
+  margin-left: auto;
+  letter-spacing: 1px;
+}
