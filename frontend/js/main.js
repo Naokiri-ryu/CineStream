@@ -123,6 +123,7 @@ function updateHeroUI() {
     <div style="display: flex; gap: 10px;">
       <button class="btn btn-accent" onclick="watchFilm(${film.id})">▶ TONTON SEKARANG</button>
       <button class="btn btn-outline" onclick="openModal(${film.id}, '${film.title.replace(/'/g, "\\'")}')">👥 WATCH PARTY</button>
+      <button class="btn btn-outline" onclick="goToDetail(${film.id})" style="font-size:13px;">ℹ INFO</button>
     </div>
   `;
 }
@@ -144,15 +145,16 @@ function renderFilms(films) {
   grid.innerHTML = films
     .map(
       (f) => `
-    <div class="film-card">
+    <div class="film-card" onclick="goToDetail(${f.id})" style="cursor:pointer;">
       <img class="film-poster" src="${f.poster_url}" alt="${f.title}" onerror="this.src='https://via.placeholder.com/200x300/222534/888899?text=Poster'">
       <div class="film-info">
         <div class="film-title" title="${f.title}">${f.title}</div>
         <div class="film-genre-text">${f.genre || "Film"} • ${f.year || "2026"}</div>
       </div>
       <div class="film-overlay">
-        <button class="btn btn-accent" onclick="watchFilm(${f.id})">▶ Tonton Sendiri</button>
-        <button class="btn btn-outline" onclick="openModal(${f.id}, '${f.title.replace(/'/g, "\\'")}')">👥 Watch Party</button>
+        <button class="btn btn-accent" onclick="event.stopPropagation(); watchFilm(${f.id})">▶ Tonton Sendiri</button>
+        <button class="btn btn-outline" onclick="event.stopPropagation(); openModal(${f.id}, '${f.title.replace(/'/g, "\\'")}')">👥 Watch Party</button>
+        <button class="btn btn-outline" onclick="event.stopPropagation(); goToDetail(${f.id})" style="font-size:11px;">ℹ Detail Film</button>
       </div>
     </div>
   `,
@@ -173,6 +175,10 @@ function filterFilms() {
 
 function watchFilm(filmId) {
   window.location.href = `/watch?film=${filmId}`;
+}
+
+function goToDetail(filmId) {
+  window.location.href = `/movie?film=${filmId}`;
 }
 
 // ── Logika Modal & Room ──
