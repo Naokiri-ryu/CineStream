@@ -5,12 +5,12 @@ from flask_socketio import SocketIO, join_room, leave_room, emit
 
 from database import init_db, get_films, get_film, create_room, get_room, deactivate_room
 
-# Inisialisasi SocketIO dengan izin lintas perangkat (CORS) agar bisa diakses HP
 socketio = SocketIO(cors_allowed_origins='*', async_mode='threading')
 
-# Simpan state room di memory (siapa host, posisi video, playing/pause)
+# State room disimpan di memory (di luar create_app agar persisten)
 room_states = {}
-room_users = {}
+room_users  = {}  # Format: { 'CODE': [{'sid': '...', 'username': '...', 'is_host': True}] }
+
 
 def create_app():
     base_dir  = os.path.dirname(os.path.dirname(__file__))
@@ -21,7 +21,6 @@ def create_app():
     app.config['SECRET_KEY'] = 'cinestream-dev-secret-2025'
 
     with app.app_context():
-
         init_db()
 
     socketio.init_app(app)
@@ -35,6 +34,11 @@ def create_app():
     @app.route('/watch')
     def watch():
         return send_from_directory(frontend, 'watch.html')
+
+    # FIX 1: Route /movie yang hilang — penyebab 404 saat klik tombol Detail
+    @app.route('/movie')
+    def movie():
+        return send_from_directory(frontend, 'movie.html')
 
     # ── REST API ──────────────────────────────────────────────────────────────
 
@@ -57,46 +61,45 @@ def create_app():
             return jsonify({'error': 'film_id diperlukan'}), 400
 
         code = create_room(film_id, host_name)
-
-        # Buat state awal room
         room_states[code] = {
-            'is_playing': False,
+            'is_playing':   False,
             'current_time': 0.0,
-            'host_sid': None,
-            'updated_at': time.time(),
+            'host_sid':     None,
+            'updated_at':   time.time(),
         }
-
         return jsonify({'room_code': code})
 
-    @app.route('/api/rooms/<room_code>')
-    def api_get_room(room_code):
-        room = get_room(room_code)
-        return jsonify(room) if room else (jsonify({'error': 'Room tidak ditemukan'}), 404)
-    
+    # FIX 2: Route statis /active harus didaftarkan SEBELUM route dinamis /<room_code>
+    # agar Flask tidak salah mencocokkan "active" sebagai nilai room_code
     @app.route('/api/rooms/active')
     def api_active_rooms():
         active = []
         for code, state in room_states.items():
             room_db = get_room(code)
             if room_db:
-                film = get_film(room_db['film_id'])
+                film  = get_film(room_db['film_id'])
                 users = room_users.get(code, [])
                 active.append({
-                    'code': code,
-                    'host': room_db['host_name'],
-                    'film_title': film['title'] if film else 'Tidak diketahui',
-                    'users_count': len(users)
+                    'code':        code,
+                    'host':        room_db['host_name'],
+                    'film_title':  film['title'] if film else 'Tidak diketahui',
+                    'users_count': len(users),
                 })
         return jsonify(active)
+
+    @app.route('/api/rooms/<room_code>')
+    def api_get_room(room_code):
+        room = get_room(room_code)
+        return jsonify(room) if room else (jsonify({'error': 'Room tidak ditemukan'}), 404)
 
     # Serve file HLS (.m3u8 + .ts)
     @app.route('/media/hls/<path:filename>')
     def serve_hls(filename):
         return send_from_directory(media_dir, filename)
 
-#── SocketIO Events ───────────────────────────────────────────────────────
-
-    room_users = {} # Format: { 'CODE': [ {'sid': '...', 'username': '...', 'is_host': True} ] }
+    # ── SocketIO Events ───────────────────────────────────────────────────────
+    # FIX 3: Hapus duplikasi "room_users = {}" yang ada di sini sebelumnya.
+    # room_users sudah didefinisikan di level modul di atas, cukup satu kali.
 
     @socketio.on('join_room')
     def on_join(data):
@@ -106,41 +109,48 @@ def create_app():
 
         join_room(code)
 
-        # Simpan identitas user di server
         if code not in room_users:
             room_users[code] = []
-        
-        # Cegah duplikasi SID
-        user_data = {'sid': request.sid, 'username': username, 'is_host': is_host}
-        if user_data not in room_users[code]:
-            room_users[code].append(user_data)
+
+        # Cegah entri SID yang sama masuk dua kali
+        sids = [u['sid'] for u in room_users[code]]
+        if request.sid not in sids:
+            room_users[code].append({
+                'sid':      request.sid,
+                'username': username,
+                'is_host':  is_host,
+            })
 
         if is_host and code in room_states:
             room_states[code]['host_sid'] = request.sid
 
-        emit('system_message', {'message': f'{username} bergabung ke room', 'timestamp': time.time()}, to=code)
-        
-        # Siarkan daftar penonton terbaru ke semua orang di room
+        emit('system_message', {
+            'message':   f'{username} bergabung ke room',
+            'timestamp': time.time(),
+        }, to=code)
+
         emit('user_list_update', room_users[code], to=code)
 
-        # Jika yang masuk adalah penonton, paksa videonya sinkron dengan Host saat ini
+        # Sinkronkan state video ke viewer baru (bukan host)
         if not is_host and code in room_states:
             state = room_states[code]
             emit('sync_state', {
-                'is_playing': state['is_playing'],
+                'is_playing':   state['is_playing'],
                 'current_time': state['current_time'],
             })
 
     @socketio.on('disconnect')
     def on_disconnect():
-        # Cari dan hapus user yang tiba-tiba keluar / tutup browser
         for code, users in room_users.items():
-            for u in users:
+            for u in list(users):
                 if u['sid'] == request.sid:
                     users.remove(u)
                     leave_room(code)
                     emit('user_list_update', users, to=code)
-                    emit('system_message', {'message': f"{u['username']} telah terputus.", 'timestamp': time.time()}, to=code)
+                    emit('system_message', {
+                        'message':   f"{u['username']} telah terputus.",
+                        'timestamp': time.time(),
+                    }, to=code)
                     break
 
     @socketio.on('chat_message')
@@ -154,28 +164,34 @@ def create_app():
 
     @socketio.on('video_play')
     def on_play(data):
-        code = data.get('room_code', '').upper()
+        code    = data.get('room_code', '').upper()
         current = data.get('current_time', 0.0)
         if code in room_states:
-            room_states[code]['is_playing'] = True
+            room_states[code]['is_playing']  = True
             room_states[code]['current_time'] = current
-        emit('video_play', {'current_time': current}, to=code, include_self=False)
+            room_states[code]['updated_at']   = time.time()
+        emit('video_play', {'current_time': current, 'server_time': time.time()},
+             to=code, include_self=False)
 
     @socketio.on('video_pause')
     def on_pause(data):
-        code = data.get('room_code', '').upper()
+        code    = data.get('room_code', '').upper()
         current = data.get('current_time', 0.0)
         if code in room_states:
-            room_states[code]['is_playing'] = False
+            room_states[code]['is_playing']  = False
             room_states[code]['current_time'] = current
-        emit('video_pause', {'current_time': current}, to=code, include_self=False)
+            room_states[code]['updated_at']   = time.time()
+        emit('video_pause', {'current_time': current, 'server_time': time.time()},
+             to=code, include_self=False)
 
     @socketio.on('video_seek')
     def on_seek(data):
-        code = data.get('room_code', '').upper()
+        code    = data.get('room_code', '').upper()
         current = data.get('current_time', 0.0)
         if code in room_states:
             room_states[code]['current_time'] = current
-        emit('video_seek', {'current_time': current}, to=code, include_self=False)
-        
+            room_states[code]['updated_at']   = time.time()
+        emit('video_seek', {'current_time': current, 'server_time': time.time()},
+             to=code, include_self=False)
+
     return app

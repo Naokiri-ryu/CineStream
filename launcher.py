@@ -104,7 +104,9 @@ def copy_to_clipboard(text):
 
 def run_flask():
     app = create_app()
-    socketio.run(app, host='127.0.0.1', port=FLASK_PORT, debug=False, use_reloader=False)
+    # FIX 5: Ganti 127.0.0.1 → 0.0.0.0 agar Nginx (dan perangkat jaringan)
+    # bisa mengakses Flask. 127.0.0.1 hanya bisa diakses dari localhost sendiri.
+    socketio.run(app, host='0.0.0.0', port=FLASK_PORT, debug=False, use_reloader=False)
 
 def create_tray_icon():
     pixmap = QPixmap(32, 32)
@@ -205,7 +207,9 @@ class UploadConvertDialog(QDialog):
         else:
             QMessageBox.critical(self, "Gagal", message)
 
-def save_to_database(self, hls_path):
+    # FIX 4: Method ini sebelumnya berada di LUAR class (indentasi salah),
+    # sehingga self.save_to_database() selalu crash dengan AttributeError.
+    def save_to_database(self, hls_path):
         try:
             # Memanggil fungsi resmi database.py agar data konsisten
             from database import add_film
