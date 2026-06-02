@@ -26,34 +26,41 @@ const IS_HOST = urlParams.get("host") === "1";
 const USERNAME = urlParams.get("name") || (IS_HOST ? "Host" : "Penonton");
 
 const video = document.getElementById("video");
-let socket = null;
+
+// KUNCI PERBAIKAN 1: BYPASS NGINX, LANGSUNG TEMBAK KE FLASK (PORT 5000)
+let socket =
+  typeof io !== "undefined"
+    ? io(`http://${window.location.hostname}:5000`)
+    : null;
 let isIgnoringEvents = false;
 
-// ── PERBAIKAN: KONTROL HOST & AKSES FULLSCREEN GUEST ──
+// ── PERBAIKAN: KONTROL HOST & AKSES FULLSCREEN GUEST (MOBILE FRIENDLY) ──
 if (!IS_HOST && ROOM_CODE) {
-  // 1. Sembunyikan UI kontrol bawaan agar tidak ada tombol play/timeline
   video.controls = false;
-
-  // 2. Izinkan klik ganda pada layar untuk masuk/keluar dari mode Fullscreen
-  video.addEventListener("dblclick", () => {
-    if (!document.fullscreenElement) {
+  video.addEventListener("click", () => {
+    const isFullscreen =
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement;
+    if (!isFullscreen) {
       if (video.requestFullscreen) video.requestFullscreen();
       else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen();
+      else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
       else if (video.msRequestFullscreen) video.msRequestFullscreen();
     } else {
       if (document.exitFullscreen) document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
     }
   });
 
-  // 3. Cegah penonton melakukan play secara manual (spasi/klik)
   video.addEventListener("play", (e) => {
-    if (isIgnoringEvents) return; // Abaikan jika ini adalah instruksi sinkronisasi dari Host
+    if (isIgnoringEvents) return;
     e.preventDefault();
     video.pause();
     showToast("Hanya Host yang dapat memulai film.");
   });
 
-  // 4. Cegah penonton melakukan pause secara manual (spasi/klik)
   video.addEventListener("pause", (e) => {
     if (isIgnoringEvents) return;
     e.preventDefault();
@@ -61,7 +68,6 @@ if (!IS_HOST && ROOM_CODE) {
     showToast("Hanya Host yang dapat menjeda film.");
   });
 } else {
-  // Host memiliki kontrol penuh
   video.controls = true;
 }
 
@@ -75,17 +81,41 @@ if (FILM_ID) {
         `${film.year} • ${film.genre} • ${film.format}`;
       document.getElementById("film-desc").textContent = film.description;
 
+      // KUNCI PERBAIKAN 2: CASE-INSENSITIVE PATH SPLITTING
+      let rawPath = film.hls_path || "";
+      let safePath = rawPath.replace(/\\/g, "/");
+      let lowerPath = safePath.toLowerCase();
+
+      let streamUrl = "";
+      if (lowerPath.includes("/media/hls/")) {
+        let idx = lowerPath.indexOf("/media/hls/") + 11;
+        streamUrl = "/media/hls/" + safePath.substring(idx);
+      } else {
+        if (safePath.startsWith("/")) safePath = safePath.substring(1);
+        streamUrl = `/media/hls/${safePath}`;
+      }
+      if (!film.hls_path) streamUrl = `/media/hls/${film.id}/index.m3u8`;
+
+      let subtitleUrl = streamUrl.replace("index.m3u8", "subtitle.vtt");
+
+      const track = document.createElement("track");
+      track.kind = "subtitles";
+      track.label = "Subtitle";
+      track.srclang = "id";
+      track.src = subtitleUrl;
+      track.default = true;
+      video.appendChild(track);
+
       if (Hls.isSupported()) {
         const hls = new Hls();
-        hls.loadSource(`/hls/${film.id}/index.m3u8`);
+        hls.loadSource(streamUrl);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          if (!ROOM_CODE) {
-            video.play().catch((e) => console.log("Autoplay dicegah browser"));
-          }
+          if (!ROOM_CODE)
+            video.play().catch((e) => console.log("Autoplay dicegah"));
         });
       } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-        video.src = `/hls/${film.id}/index.m3u8`;
+        video.src = streamUrl;
         video.addEventListener("loadedmetadata", () => {
           if (!ROOM_CODE) video.play();
         });
@@ -99,8 +129,6 @@ if (FILM_ID) {
 if (ROOM_CODE) {
   document.getElementById("party-panel").style.display = "flex";
   document.getElementById("party-code").textContent = ROOM_CODE;
-
-  socket = io();
 
   socket.on("connect", () => {
     setSyncStatus(true, "Terhubung ke Party");
@@ -120,9 +148,7 @@ if (ROOM_CODE) {
     list.innerHTML = users
       .map(
         (u) =>
-          `<li class="${u.is_host ? "host" : ""}">${
-            u.username === USERNAME ? `<b>${u.username} (Kamu)</b>` : u.username
-          }</li>`,
+          `<li class="${u.is_host ? "host" : ""}">${u.username === USERNAME ? `<b>${u.username} (Kamu)</b>` : u.username}</li>`,
       )
       .join("");
     document.getElementById("user-count").textContent = users.length;
@@ -136,10 +162,9 @@ if (ROOM_CODE) {
     addSystemMessage(data.message);
   });
 
-  // PERBAIKAN: Ketika Host keluar, tutup room dan tendang penonton
   socket.on("room_closed", (data) => {
     showToast(data.message || "Host telah keluar. Room Watch Party ditutup.");
-    isIgnoringEvents = true; // Kunci video
+    isIgnoringEvents = true;
     video.pause();
     setTimeout(() => {
       window.location.href = "/";
@@ -196,6 +221,29 @@ if (ROOM_CODE) {
   }
 }
 
+const tabRoom = document.getElementById("tab-room");
+if (tabRoom && IS_HOST) {
+  const endBtn = document.createElement("button");
+  endBtn.className = "btn";
+  endBtn.style.backgroundColor = "#ff0043";
+  endBtn.style.color = "white";
+  endBtn.style.marginTop = "20px";
+  endBtn.style.width = "100%";
+  endBtn.style.fontWeight = "bold";
+  endBtn.innerHTML = "❌ Akhiri Watch Party";
+
+  endBtn.onclick = () => {
+    if (
+      confirm(
+        "Yakin ingin mengakhiri Watch Party untuk semua orang?\nRoom ini akan dihapus secara permanen.",
+      )
+    ) {
+      socket.emit("end_party", { room_code: ROOM_CODE });
+    }
+  };
+  tabRoom.appendChild(endBtn);
+}
+
 // ── Chat & UI ──
 const chatInput = document.getElementById("chat-input");
 chatInput.addEventListener("keypress", (e) => {
@@ -214,7 +262,6 @@ function appendChat(sender, msg, isMe) {
   const box = document.getElementById("chat-messages");
   const el = document.createElement("div");
   el.className = `chat-msg ${isMe ? "me" : ""}`;
-
   const safeMsg = msg.replace(/</g, "&lt;").replace(/>/g, "&gt;");
   el.innerHTML = `<div class="sender">${sender}</div><div>${safeMsg}</div>`;
   box.appendChild(el);
@@ -249,14 +296,9 @@ function switchTab(targetTab) {
 
 function setSyncStatus(connected, text) {
   const dot = document.getElementById("sync-dot");
-  dot.className = `sync-dot ${connected ? "connected" : ""}`;
-  document.getElementById("sync-label").textContent = text;
-}
-
-function copyRoomCode() {
-  if (!ROOM_CODE) return;
-  navigator.clipboard.writeText(ROOM_CODE);
-  showToast("Kode Room disalin: " + ROOM_CODE);
+  if (dot) dot.className = `sync-dot ${connected ? "connected" : ""}`;
+  const lbl = document.getElementById("sync-label");
+  if (lbl) lbl.textContent = text;
 }
 
 function showToast(msg) {

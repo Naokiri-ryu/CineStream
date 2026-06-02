@@ -4,6 +4,13 @@ let currentFilm = null;
 let allFilms = [];
 let selectedFilmId = null;
 
+// Melacak pengunjung aktif secara global di background
+if (typeof io !== "undefined" && !window.location.pathname.includes("/watch")) {
+  const globalSocket = io(`http://${window.location.hostname}:5000`);
+}
+
+// ... (lanjutan kode main.js Anda yang sudah ada di bawahnya) ...
+
 // ── Tema ──
 const themeToggle = document.getElementById("theme-toggle");
 const currentTheme = localStorage.getItem("theme") || "dark";

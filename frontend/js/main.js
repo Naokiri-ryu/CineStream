@@ -3,6 +3,11 @@ let heroIndex = 0;
 let heroInterval;
 let selectedFilmId = null;
 
+// Melacak pengunjung aktif secara global di background
+if (typeof io !== "undefined" && !window.location.pathname.includes("/watch")) {
+  const globalSocket = io(`http://${window.location.hostname}:5000`);
+}
+
 const mobileToggle = document.getElementById("mobile-toggle");
 const navLinks = document.getElementById("nav-links");
 if (mobileToggle) {
