@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Detail Film - CineStream</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="stylesheet" href="/css/movie.css" />
+  </head>
+  <body>
+    <!-- Navbar -->
+    <nav class="navbar" id="navbar">
+      <a class="logo" href="/">
+        <div class="logo-icon">▶</div>
+        CineStream
+      </a>
+      <button class="mobile-toggle" id="mobile-toggle">☰</button>
+      <div class="nav-links" id="nav-links">
+        <a href="/">Home</a>
+        <a href="#" onclick="document.getElementById('search-container').classList.toggle('show')">Search</a>
+        <a href="#" onclick="showJoinModal()">Gabung Room</a>
+        <button class="theme-toggle" id="theme-toggle" title="Ubah Tema">🌙</button>
+      </div>
+      <div class="search-container" id="search-container">
+        <input type="text" id="search" placeholder="Cari film..." />
+      </div>
+    </nav>
+
+    <!-- Hero Backdrop -->
+    <div class="detail-backdrop" id="detail-backdrop">
+      <div class="detail-backdrop-overlay"></div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="detail-main" id="detail-main">
+
+      <!-- Loading State -->
+      <div class="detail-loading" id="detail-loading">
+        <div class="spinner"></div>
+        <p>Memuat informasi film...</p>
+      </div>
+
+      <!-- Detail Content -->
+      <div class="detail-content" id="detail-content" style="display:none;">
+
+        <!-- Breadcrumb -->
+        <div class="breadcrumb">
+          <a href="/">Home</a>
+          <span>›</span>
+          <span id="breadcrumb-title">Film</span>
+        </div>
+
+        <div class="detail-layout">
+          <!-- Poster -->
+          <div class="detail-poster-wrap">
+            <img class="detail-poster" id="detail-poster" src="" alt="" />
+            <div class="poster-glow" id="poster-glow"></div>
+          </div>
+
+          <!-- Info -->
+          <div class="detail-info">
+            <div class="detail-badge-row">
+              <span class="badge-premium">PREMIUM</span>
+              <span class="badge-genre" id="detail-genre-badge">—</span>
+            </div>
+
+            <h1 class="detail-title" id="detail-title">Memuat...</h1>
+
+            <div class="detail-meta-row">
+              <div class="meta-item">
+                <span class="meta-icon">📅</span>
+                <span id="detail-year">—</span>
+              </div>
+              <div class="meta-divider">•</div>
+              <div class="meta-item">
+                <span class="meta-icon">⏱</span>
+                <span id="detail-duration">—</span>
+              </div>
+              <div class="meta-divider">•</div>
+              <div class="meta-item">
+                <span class="meta-icon">🎭</span>
+                <span id="detail-genre-text">—</span>
+              </div>
+            </div>
+
+            <!-- Rating Stars (dekoratif) -->
+            <div class="detail-rating">
+              <span class="stars">★★★★☆</span>
+              <span class="rating-text">4.0 / 5.0</span>
+            </div>
+
+            <!-- Sinopsis -->
+            <div class="detail-synopsis-block">
+              <h3 class="synopsis-label">Sinopsis</h3>
+              <p class="detail-synopsis" id="detail-synopsis">—</p>
+            </div>
+
+            <!-- Tags -->
+            <div class="detail-tags" id="detail-tags"></div>
+
+            <!-- CTA Buttons -->
+            <div class="detail-actions">
+              <button class="btn btn-accent btn-lg" id="btn-watch">
+                ▶&nbsp;&nbsp;Tonton Sekarang
+              </button>
+              <button class="btn btn-outline btn-lg" id="btn-party">
+                👥&nbsp;&nbsp;Watch Party
+              </button>
+              <button class="btn btn-ghost btn-lg" onclick="history.back()">
+                ← Kembali
+              </button>
+            </div>
+
+            <!-- Info tambahan -->
+            <div class="detail-extra-info">
+              <div class="extra-row">
+                <span class="extra-label">Format</span>
+                <span class="extra-value">HD · HLS Stream</span>
+              </div>
+              <div class="extra-row">
+                <span class="extra-label">Bahasa</span>
+                <span class="extra-value">Inggris</span>
+              </div>
+              <div class="extra-row">
+                <span class="extra-label">Subtitle</span>
+                <span class="extra-value">Tersedia</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Divider -->
+        <div class="section-divider"></div>
+
+        <!-- Film Lainnya -->
+        <section class="more-films-section">
+          <h2 class="section-title">Film Lainnya</h2>
+          <div class="film-grid" id="more-films-grid"></div>
+        </section>
+
+      </div>
+    </main>
+
+    <!-- Modal Gabung/Buat Room -->
+    <div class="modal-backdrop" id="modal">
+      <div class="modal">
+        <div class="modal-tabs">
+          <button class="tab-btn active" id="tab-btn-create" onclick="switchModalTab('create')">Buat Room</button>
+          <button class="tab-btn" id="tab-btn-join" onclick="switchModalTab('join')">Gabung Room</button>
+        </div>
+        <div id="modal-create" class="modal-form active">
+          <div style="font-size:13px;color:var(--muted);margin-bottom:1rem;" id="modal-film-title">Pilih film dulu dari katalog</div>
+          <div class="form-group">
+            <label class="form-label">Nama Kamu (Host)</label>
+            <input class="form-input" type="text" id="host-name" placeholder="Masukkan namamu" />
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-outline" onclick="closeModal()">Batal</button>
+            <button class="btn btn-accent" onclick="createRoom()">Buat Room</button>
+          </div>
+        </div>
+        <div id="modal-join" class="modal-form">
+          <div class="form-group">
+            <label class="form-label">Kode Room</label>
+            <input class="form-input" type="text" id="join-code" placeholder="Contoh: A1B2C3" maxlength="6" style="text-transform:uppercase" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nama Kamu</label>
+            <input class="form-input" type="text" id="join-name" placeholder="Masukkan namamu" />
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-outline" onclick="closeModal()">Batal</button>
+            <button class="btn btn-accent" onclick="joinRoom()">Gabung</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="/js/movie.js"></script>
+  </body>
+</html>
