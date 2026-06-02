@@ -24,6 +24,9 @@ def init_db():
             duration    INTEGER,
             poster_url  TEXT,
             hls_path    TEXT NOT NULL,
+            format      TEXT DEFAULT 'HD · HLS Stream',
+            language    TEXT DEFAULT 'Inggris',
+            has_subtitle INTEGER DEFAULT 1,
             created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -42,7 +45,7 @@ def init_db():
     count = conn.execute('SELECT COUNT(*) FROM films').fetchone()[0]
     if count == 0:
         conn.executescript('''
-            INSERT INTO films (title, description, genre, year, duration, poster_url, hls_path) VALUES
+            INSERT INTO films (title, description, genre, year, duration, poster_url, hls_path, format, language, has_subtitle) VALUES
             (
                 'Big Buck Bunny',
                 'Film animasi pendek tentang seekor kelinci raksasa yang harus menghadapi tiga penggangu kecil yang jahat.',
@@ -50,7 +53,10 @@ def init_db():
                 2008,
                 10,
                 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Big_buck_bunny_poster_big.jpg/800px-Big_buck_bunny_poster_big.jpg',
-                'big_buck_bunny/index.m3u8'
+                'big_buck_bunny/index.m3u8',
+                'HD · HLS Stream',
+                'Inggris',
+                1
             ),
             (
                 'Elephants Dream',
@@ -59,15 +65,29 @@ def init_db():
                 2006,
                 11,
                 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/70/Elephants_Dream_s1_l.jpg/800px-Elephants_Dream_s1_l.jpg',
-                'elephants_dream/index.m3u8'
+                'elephants_dream/index.m3u8',
+                'HD · HLS Stream',
+                'Inggris',
+                0
             );
         ''')
 
     conn.commit()
+
+    # Migrasi otomatis: tambah kolom baru ke database yang sudah ada
+    # SQLite tidak support IF NOT EXISTS pada ALTER TABLE, jadi pakai try/except
+    for col, definition in [
+        ('format',       "TEXT DEFAULT 'HD · HLS Stream'"),
+        ('language',     "TEXT DEFAULT 'Inggris'"),
+        ('has_subtitle', 'INTEGER DEFAULT 1'),
+    ]:
+        try:
+            conn.execute(f'ALTER TABLE films ADD COLUMN {col} {definition}')
+            conn.commit()
+        except Exception:
+            pass  # kolom sudah ada, tidak perlu ditambah lagi
+
     conn.close()
-
-
-def get_films():
     conn = get_db()
     rows = conn.execute('SELECT * FROM films ORDER BY title').fetchall()
     conn.close()
@@ -80,12 +100,21 @@ def get_film(film_id):
     conn.close()
     return dict(row) if row else None
 
+def get_films():
+    conn = get_db()
+    rows = conn.execute('SELECT * FROM films ORDER BY title').fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
-def add_film(title, description, genre, year, duration, poster_url, hls_path):
+
+def add_film(title, description, genre, year, duration, poster_url, hls_path,
+             format='HD · HLS Stream', language='Inggris', has_subtitle=1):
     conn = get_db()
     conn.execute(
-        'INSERT INTO films (title, description, genre, year, duration, poster_url, hls_path) VALUES (?,?,?,?,?,?,?)',
-        (title, description, genre, year, duration, poster_url, hls_path)
+        '''INSERT INTO films
+           (title, description, genre, year, duration, poster_url, hls_path, format, language, has_subtitle)
+           VALUES (?,?,?,?,?,?,?,?,?,?)''',
+        (title, description, genre, year, duration, poster_url, hls_path, format, language, has_subtitle)
     )
     conn.commit()
     conn.close()

@@ -14,7 +14,7 @@ import socket
 import sqlite3
 import subprocess
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, 
-                            QPushButton, QLabel, QSystemTrayIcon, QLineEdit, QMessageBox, QDialog, QProgressBar, QFileDialog)
+                            QPushButton, QLabel, QSystemTrayIcon, QLineEdit, QMessageBox, QDialog, QProgressBar, QFileDialog, QCheckBox)
 from PyQt6.QtGui import QIcon, QColor, QPainter, QPixmap
 from PyQt6.QtCore import Qt, QPoint, QThread, pyqtSignal
 import psutil
@@ -104,9 +104,7 @@ def copy_to_clipboard(text):
 
 def run_flask():
     app = create_app()
-    # FIX 5: Ganti 127.0.0.1 → 0.0.0.0 agar Nginx (dan perangkat jaringan)
-    # bisa mengakses Flask. 127.0.0.1 hanya bisa diakses dari localhost sendiri.
-    socketio.run(app, host='0.0.0.0', port=FLASK_PORT, debug=False, use_reloader=False)
+    socketio.run(app, host='127.0.0.1', port=FLASK_PORT, debug=False, use_reloader=False)
 
 def create_tray_icon():
     pixmap = QPixmap(32, 32)
@@ -147,6 +145,18 @@ class UploadConvertDialog(QDialog):
         self.poster_input = QLineEdit()
         self.poster_input.setPlaceholderText("URL Poster Gambar")
 
+        self.language_input = QLineEdit()
+        self.language_input.setPlaceholderText("Bahasa (Cth: Indonesia, Inggris)")
+        self.language_input.setText("Inggris")
+
+        self.format_input = QLineEdit()
+        self.format_input.setPlaceholderText("Format (Cth: HD · HLS Stream)")
+        self.format_input.setText("HD · HLS Stream")
+
+        self.subtitle_check = QCheckBox("Subtitle Tersedia")
+        self.subtitle_check.setChecked(True)
+        self.subtitle_check.setStyleSheet("color: white; padding: 4px 0;")
+
         self.file_path = None
         self.btn_select_file = QPushButton("📁 Pilih Video Mentah (.mp4 / .mkv)")
         self.btn_select_file.setStyleSheet("background-color: #24243a; padding: 10px; border-radius: 5px;")
@@ -164,9 +174,12 @@ class UploadConvertDialog(QDialog):
         self.btn_start.clicked.connect(self.start_conversion)
 
         for widget in [self.title_input, self.desc_input, self.genre_input, 
-                       self.year_input, self.duration_input, self.poster_input]:
+                       self.year_input, self.duration_input, self.poster_input,
+                       self.language_input, self.format_input]:
             widget.setStyleSheet("padding: 8px; border: 1px solid #2e2e44; border-radius: 4px; background: #0f0f13;")
             layout.addWidget(widget)
+
+        layout.addWidget(self.subtitle_check)
 
         layout.addWidget(self.btn_select_file)
         layout.addWidget(self.lbl_file_name)
@@ -207,25 +220,23 @@ class UploadConvertDialog(QDialog):
         else:
             QMessageBox.critical(self, "Gagal", message)
 
-    # FIX 4: Method ini sebelumnya berada di LUAR class (indentasi salah),
-    # sehingga self.save_to_database() selalu crash dengan AttributeError.
+    # FIX: method ini sebelumnya di luar class (indentasi salah)
     def save_to_database(self, hls_path):
         try:
-            # Memanggil fungsi resmi database.py agar data konsisten
             from database import add_film
-            
-            # Cek nilai input. Jika kosong, berikan nilai default
-            year_val = self.year_input.text().strip()
+            year_val     = self.year_input.text().strip()
             duration_val = self.duration_input.text().strip()
-            
             add_film(
-                title=self.title_input.text().strip(),
-                description=self.desc_input.text().strip() or "Deskripsi tidak tersedia.",
-                genre=self.genre_input.text().strip() or "Film",
-                year=int(year_val) if year_val.isdigit() else 2026,
-                duration=int(duration_val) if duration_val.isdigit() else 0,
-                poster_url=self.poster_input.text().strip() or "",
-                hls_path=hls_path
+                title       = self.title_input.text().strip(),
+                description = self.desc_input.text().strip() or "Deskripsi tidak tersedia.",
+                genre       = self.genre_input.text().strip() or "Film",
+                year        = int(year_val) if year_val.isdigit() else 2026,
+                duration    = int(duration_val) if duration_val.isdigit() else 0,
+                poster_url  = self.poster_input.text().strip() or "",
+                hls_path    = hls_path,
+                format      = self.format_input.text().strip() or "HD · HLS Stream",
+                language    = self.language_input.text().strip() or "Inggris",
+                has_subtitle= 1 if self.subtitle_check.isChecked() else 0,
             )
         except Exception as e:
             print(f"Gagal menyimpan ke DB: {e}")
@@ -235,7 +246,7 @@ class AddFilmDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("CineStream - Tambah Film Manual")
-        self.setFixedSize(350, 400)
+        self.setFixedSize(350, 560)
         self.setStyleSheet("""
             QDialog { background-color: #121212; color: white; }
             QLabel { color: #E0E0E0; font-family: 'Segoe UI'; margin-top: 5px; }
@@ -243,6 +254,7 @@ class AddFilmDialog(QDialog):
             QLineEdit:focus { border: 1px solid #E50914; }
             QPushButton { background-color: #E50914; color: white; border: none; border-radius: 5px; padding: 8px; font-weight: bold; }
             QPushButton:hover { background-color: #B20710; }
+            QCheckBox { color: #E0E0E0; padding: 4px 0; }
         """)
 
         layout = QVBoxLayout(self)
@@ -268,12 +280,26 @@ class AddFilmDialog(QDialog):
         layout.addWidget(QLabel("URL Poster"))
         layout.addWidget(self.poster_input)
 
+        self.language_input = QLineEdit()
+        self.language_input.setText("Inggris")
+        layout.addWidget(QLabel("Bahasa"))
+        layout.addWidget(self.language_input)
+
+        self.format_input = QLineEdit()
+        self.format_input.setText("HD · HLS Stream")
+        layout.addWidget(QLabel("Format"))
+        layout.addWidget(self.format_input)
+
+        self.subtitle_check = QCheckBox("Subtitle Tersedia")
+        self.subtitle_check.setChecked(True)
+        layout.addWidget(self.subtitle_check)
+
         submit_btn = QPushButton("Simpan ke Database")
         submit_btn.clicked.connect(self.save_film)
         layout.addWidget(submit_btn)
 
     def save_film(self):
-        title = self.title_input.text().strip()
+        title    = self.title_input.text().strip()
         hls_path = self.hls_input.text().strip()
 
         if not title or not hls_path:
@@ -283,13 +309,16 @@ class AddFilmDialog(QDialog):
         try:
             from database import add_film
             add_film(
-                title=title,
-                description=self.desc_input.text() or "Deskripsi tidak tersedia.",
-                genre=self.genre_input.text() or "Film",
-                year=2026,
-                duration=0,
-                poster_url=self.poster_input.text() or "",
-                hls_path=hls_path
+                title       = title,
+                description = self.desc_input.text() or "Deskripsi tidak tersedia.",
+                genre       = self.genre_input.text() or "Film",
+                year        = 2026,
+                duration    = 0,
+                poster_url  = self.poster_input.text() or "",
+                hls_path    = hls_path,
+                format      = self.format_input.text().strip() or "HD · HLS Stream",
+                language    = self.language_input.text().strip() or "Inggris",
+                has_subtitle= 1 if self.subtitle_check.isChecked() else 0,
             )
             QMessageBox.information(self, "Sukses", f"Film '{title}' berhasil ditambahkan ke katalog!")
             self.accept()

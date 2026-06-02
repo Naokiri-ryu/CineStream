@@ -141,24 +141,38 @@ function prevSlide() {
 // ── Logika Katalog Scroll ──
 function renderFilms(films) {
   const grid = document.getElementById("film-grid");
+  if (!grid) return;
+
+  if (films.length === 0) {
+    grid.innerHTML =
+      '<p style="grid-column: 1/-1; text-align:center; color:var(--muted); padding: 40px 0;">Tidak ada film yang ditemukan.</p>';
+    return;
+  }
+
   grid.innerHTML = films
     .map(
       (f) => `
     <div class="film-card" onclick="goToDetail(${f.id})" style="cursor:pointer;">
-      <img class="film-poster" src="${f.poster_url}" alt="${f.title}" onerror="this.src='https://via.placeholder.com/200x300/222534/888899?text=Poster'">
+      <img class="film-poster" src="${f.poster_url}" alt="${f.title}"
+           onerror="this.src='https://via.placeholder.com/200x300/222534/888899?text=Poster'">
       <div class="film-info">
         <div class="film-title" title="${f.title}">${f.title}</div>
-        <div class="film-genre-text">${f.genre || "Film"} • ${f.year || "2026"}</div>
+        <div class="film-genre-text">${f.genre || "Film"} • ${f.year || "—"}</div>
       </div>
       <div class="film-overlay">
-        <button class="btn btn-accent" onclick="event.stopPropagation(); watchFilm(${f.id})">▶ Tonton Sendiri</button>
-        <button class="btn btn-outline" onclick="event.stopPropagation(); openModal(${f.id}, '${f.title.replace(/'/g, "\\'")}')">👥 Watch Party</button>
+        <button class="btn btn-accent" onclick="event.stopPropagation(); window.location.href='/watch?film=${f.id}'">▶ Tonton</button>
+        <button class="btn btn-outline" onclick="event.stopPropagation(); openModal(${f.id}, '${f.title.replace(/'/g, "\\'")}')">👥 Party</button>
         <button class="btn btn-outline" onclick="event.stopPropagation(); goToDetail(${f.id})" style="font-size:11px;">ℹ Detail Film</button>
       </div>
     </div>
   `,
     )
     .join("");
+}
+
+// Tambahkan fungsi ini di bawahnya jika belum ada di main.js
+function goToDetail(id) {
+  window.location.href = `/movie?id=${id}`;
 }
 
 function filterFilms() {

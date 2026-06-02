@@ -17,9 +17,17 @@
       <button class="mobile-toggle" id="mobile-toggle">☰</button>
       <div class="nav-links" id="nav-links">
         <a href="/">Home</a>
-        <a href="#" onclick="document.getElementById('search-container').classList.toggle('show')">Search</a>
+        <a
+          href="#"
+          onclick="
+            document.getElementById('search-container').classList.toggle('show')
+          "
+          >Search</a
+        >
         <a href="#" onclick="showJoinModal()">Gabung Room</a>
-        <button class="theme-toggle" id="theme-toggle" title="Ubah Tema">🌙</button>
+        <button class="theme-toggle" id="theme-toggle" title="Ubah Tema">
+          🌙
+        </button>
       </div>
       <div class="search-container" id="search-container">
         <input type="text" id="search" placeholder="Cari film..." />
@@ -33,7 +41,6 @@
 
     <!-- Main Content -->
     <main class="detail-main" id="detail-main">
-
       <!-- Loading State -->
       <div class="detail-loading" id="detail-loading">
         <div class="spinner"></div>
@@ -41,8 +48,7 @@
       </div>
 
       <!-- Detail Content -->
-      <div class="detail-content" id="detail-content" style="display:none;">
-
+      <div class="detail-content" id="detail-content" style="display: none">
         <!-- Breadcrumb -->
         <div class="breadcrumb">
           <a href="/">Home</a>
@@ -115,15 +121,15 @@
             <div class="detail-extra-info">
               <div class="extra-row">
                 <span class="extra-label">Format</span>
-                <span class="extra-value">HD · HLS Stream</span>
+                <span class="extra-value" id="detail-format">—</span>
               </div>
               <div class="extra-row">
                 <span class="extra-label">Bahasa</span>
-                <span class="extra-value">Inggris</span>
+                <span class="extra-value" id="detail-language">—</span>
               </div>
               <div class="extra-row">
                 <span class="extra-label">Subtitle</span>
-                <span class="extra-value">Tersedia</span>
+                <span class="extra-value" id="detail-subtitle">—</span>
               </div>
             </div>
           </div>
@@ -137,7 +143,6 @@
           <h2 class="section-title">Film Lainnya</h2>
           <div class="film-grid" id="more-films-grid"></div>
         </section>
-
       </div>
     </main>
 
@@ -145,31 +150,71 @@
     <div class="modal-backdrop" id="modal">
       <div class="modal">
         <div class="modal-tabs">
-          <button class="tab-btn active" id="tab-btn-create" onclick="switchModalTab('create')">Buat Room</button>
-          <button class="tab-btn" id="tab-btn-join" onclick="switchModalTab('join')">Gabung Room</button>
+          <button
+            class="tab-btn active"
+            id="tab-btn-create"
+            onclick="switchModalTab('create')"
+          >
+            Buat Room
+          </button>
+          <button
+            class="tab-btn"
+            id="tab-btn-join"
+            onclick="switchModalTab('join')"
+          >
+            Gabung Room
+          </button>
         </div>
         <div id="modal-create" class="modal-form active">
-          <div style="font-size:13px;color:var(--muted);margin-bottom:1rem;" id="modal-film-title">Pilih film dulu dari katalog</div>
+          <div
+            style="font-size: 13px; color: var(--muted); margin-bottom: 1rem"
+            id="modal-film-title"
+          >
+            Pilih film dulu dari katalog
+          </div>
           <div class="form-group">
             <label class="form-label">Nama Kamu (Host)</label>
-            <input class="form-input" type="text" id="host-name" placeholder="Masukkan namamu" />
+            <input
+              class="form-input"
+              type="text"
+              id="host-name"
+              placeholder="Masukkan namamu"
+            />
           </div>
           <div class="modal-actions">
-            <button class="btn btn-outline" onclick="closeModal()">Batal</button>
-            <button class="btn btn-accent" onclick="createRoom()">Buat Room</button>
+            <button class="btn btn-outline" onclick="closeModal()">
+              Batal
+            </button>
+            <button class="btn btn-accent" onclick="createRoom()">
+              Buat Room
+            </button>
           </div>
         </div>
         <div id="modal-join" class="modal-form">
           <div class="form-group">
             <label class="form-label">Kode Room</label>
-            <input class="form-input" type="text" id="join-code" placeholder="Contoh: A1B2C3" maxlength="6" style="text-transform:uppercase" />
+            <input
+              class="form-input"
+              type="text"
+              id="join-code"
+              placeholder="Contoh: A1B2C3"
+              maxlength="6"
+              style="text-transform: uppercase"
+            />
           </div>
           <div class="form-group">
             <label class="form-label">Nama Kamu</label>
-            <input class="form-input" type="text" id="join-name" placeholder="Masukkan namamu" />
+            <input
+              class="form-input"
+              type="text"
+              id="join-name"
+              placeholder="Masukkan namamu"
+            />
           </div>
           <div class="modal-actions">
-            <button class="btn btn-outline" onclick="closeModal()">Batal</button>
+            <button class="btn btn-outline" onclick="closeModal()">
+              Batal
+            </button>
             <button class="btn btn-accent" onclick="joinRoom()">Gabung</button>
           </div>
         </div>
