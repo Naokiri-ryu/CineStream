@@ -141,7 +141,6 @@ function prevSlide() {
 // ── Logika Katalog Scroll ──
 function renderFilms(films) {
   const grid = document.getElementById("film-grid");
-  // Perhatikan: onclick dihilangkan dari film-card dan dipindah ke tombol
   grid.innerHTML = films
     .map(
       (f) => `
@@ -189,12 +188,15 @@ function showJoinModal() {
   document.getElementById("tab-btn-create").style.display = "none";
 }
 
-function openModal(filmId, title) {
-  selectedFilmId = filmId;
+function openModal(filmId) {
+  // Cari data film di katalog berdasarkan ID
+  const film = allFilms.find((f) => f.id === filmId);
+  if (!film) return; // Jika gagal, hentikan
+
+  selectedFilmId = film.id;
   document.getElementById("modal-film-title").textContent =
-    "Terpilih: " + title;
+    "Terpilih: " + film.title;
   document.getElementById("modal").classList.add("open");
-  // Tampilkan kembali tab Buat Room karena film sudah dipilih
   document.getElementById("tab-btn-create").style.display = "block";
   switchModalTab("create");
 }
