@@ -1,464 +1,333 @@
-"""
-CineStream Modern Launcher (PyQt6 Edition)
-------------------------------------------
-Menjalankan Server Flask API + SocketIO, serta menampilkan
-menu tray kustom berwarna hitam modern sesuai mockup UI.
-"""
+# launcher.py
+import sys, os, re, threading, time, shutil, sqlite3, subprocess, webbrowser
+import requests # Pastikan pip install requests
+import psutil   # Pastikan pip install psutil
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+                             QPushButton, QLabel, QLineEdit, QMessageBox, QDialog, 
+                             QProgressBar, QFileDialog, QTableWidget, QTableWidgetItem, 
+                             QHeaderView, QTextEdit, QTabWidget, QGridLayout)
+from PyQt6.QtGui import QFont, QColor
+from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
 
-import sys
-import os
-import re
-import threading
-import webbrowser
-import socket
-import sqlite3
-import subprocess
-from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, 
-                            QPushButton, QLabel, QSystemTrayIcon, QLineEdit, QMessageBox, QDialog, QProgressBar, QFileDialog, QCheckBox)
-from PyQt6.QtGui import QIcon, QColor, QPainter, QPixmap
-from PyQt6.QtCore import Qt, QPoint, QThread, pyqtSignal
-import psutil
-
-# Tambahkan folder server ke Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'server'))
 
 from app import create_app, socketio
-from database import DB_PATH, init_db
+from database import DB_PATH, init_db, get_all_films, delete_film, add_film
 
 FLASK_PORT = 5000
-NGINX_PORT = 8080  # Port utama yang diakses user melalui Nginx
+NGINX_PORT = 8080
+app_flask = create_app()
 
-# ── Mesin Konversi Latar Belakang (FFmpeg) ───────────────────────────────────
+def run_flask():
+    socketio.run(app_flask, host='0.0.0.0', port=FLASK_PORT, debug=False, use_reloader=False)
+
+# ── FFmpeg Worker (Dengan Fitur Pembatalan) ──
 class FFmpegWorker(QThread):
-    finished = pyqtSignal(bool, str, str) # (Status Sukses, Pesan, HLS Path)
+    progress = pyqtSignal(int)
+    finished = pyqtSignal(bool, str, str)
 
     def __init__(self, input_file, title):
         super().__init__()
         self.input_file = input_file
         self.title = title
+        self._is_cancelled = False
+        self.process = None
+        self.output_dir = ""
+
+    def stop(self):
+        """Memicu penghentian paksa proses FFmpeg"""
+        self._is_cancelled = True
+        if self.process:
+            self.process.kill()
 
     def run(self):
         try:
             safe_title = re.sub(r'[^a-zA-Z0-9]', '_', self.title.lower())
-            output_dir = os.path.join(os.getcwd(), 'media', 'hls', safe_title)
-            os.makedirs(output_dir, exist_ok=True)
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            self.output_dir = os.path.join(base_dir, 'media', 'hls', safe_title)
+            os.makedirs(self.output_dir, exist_ok=True)
+            output_m3u8 = os.path.join(self.output_dir, 'index.m3u8')
             
-            output_m3u8 = os.path.join(output_dir, 'index.m3u8')
-            relative_hls_path = f"{safe_title}/index.m3u8"
-
             cmd = [
-                'ffmpeg', '-y', '-i', self.input_file,
-                '-map', '0:v', '-map', '0:a',
-                '-c:v', 'copy', '-c:a', 'aac',
-                '-start_number', '0', '-hls_time', '10',
-                '-hls_list_size', '0', '-f', 'hls',
-                output_m3u8
+                'ffmpeg', '-y', '-i', os.path.normpath(self.input_file),
+                '-c:v', 'libx264', '-profile:v', 'high', '-pix_fmt', 'yuv420p',
+                '-level', '4.1', '-s', '1280x720',
+                '-start_number', '0', '-hls_time', '10', '-hls_list_size', '0',
+                '-f', 'hls', os.path.normpath(output_m3u8)
             ]
-
-            process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-            if process.returncode == 0:
-                self.finished.emit(True, "Konversi selesai!", relative_hls_path)
+            
+            self.process = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
+                universal_newlines=True, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            )
+            
+            while True:
+                if self._is_cancelled:
+                    break
+                line = self.process.stdout.readline()
+                if not line: break
+                if "frame=" in line: self.progress.emit(50)
+                    
+            self.process.wait()
+            
+            if self._is_cancelled:
+                shutil.rmtree(self.output_dir, ignore_errors=True) # Bersihkan file sampah
+                self.finished.emit(False, "Konversi dibatalkan. File sementara dihapus.", "")
+            elif self.process.returncode == 0:
+                self.progress.emit(100)
+                self.finished.emit(True, f"Sukses mengonversi {self.title}!", self.output_dir)
             else:
-                self.finished.emit(False, f"Gagal konversi:\n{process.stderr}", "")
-                
+                self.finished.emit(False, f"Error Code: {self.process.returncode}", "")
         except Exception as e:
             self.finished.emit(False, str(e), "")
 
-# ── Validasi SQLite & Health Check ───────────────────────────────────────────
-def check_database_health():
-    print(f"[⚙️] Memeriksa jalur database: {DB_PATH}")
-    try:
-        if not os.path.exists(DB_PATH):
-            print("[-] Database belum ada. Menginisialisasi database baru...")
-        
-        init_db()
-        
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM films;")
-        total_films = cursor.fetchone()[0]
-        conn.close()
-        print(f"[+️] SQLite Terhubung Sukses! Total katalog film: {total_films}")
-        return True
-    except Exception as e:
-        print(f"[❌] Error Database: {e}")
-        return False
-
-# ── Fungsi Pendukung ─────────────────────────────────────────────────────────
-def get_local_ip():
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.settimeout(1)
-        s.connect(('8.8.8.8', 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except Exception:
-        return '127.0.0.1'
-
-def copy_to_clipboard(text):
-    app = QApplication.instance()
-    if app:
-        app.clipboard().setText(text)
-
-def run_flask():
-    app = create_app()
-    socketio.run(app, host='127.0.0.1', port=FLASK_PORT, debug=False, use_reloader=False)
-
-def create_tray_icon():
-    pixmap = QPixmap(32, 32)
-    pixmap.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    painter.setBrush(QColor("#E50914"))
-    painter.setPen(Qt.PenStyle.NoPen)
-    painter.drawEllipse(4, 4, 24, 24)
-    painter.end()
-    return QIcon(pixmap)
-
-# ── Dialog UI: Upload & Konversi Otomatis ────────────────────────────────────
-class UploadConvertDialog(QDialog):
+# ── DIALOG KONVERSI ──
+class ConvertVideoDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("🎬 Upload & Auto-Convert Film")
-        self.setFixedSize(400, 450)
-        self.setStyleSheet("background-color: #1a1a24; color: white; font-family: Segoe UI;")
-
-        layout = QVBoxLayout()
-
-        self.title_input = QLineEdit()
-        self.title_input.setPlaceholderText("Judul Film (Cth: The Matrix)")
+        self.setWindowTitle("Mesin Konversi Video")
+        self.resize(500, 300)
+        self.setStyleSheet(parent.styleSheet())
+        layout = QVBoxLayout(self)
         
-        self.desc_input = QLineEdit()
-        self.desc_input.setPlaceholderText("Deskripsi Singkat")
+        self.txt_title = QLineEdit()
+        self.txt_title.setPlaceholderText("Judul Output...")
+        layout.addWidget(self.txt_title)
         
-        self.genre_input = QLineEdit()
-        self.genre_input.setPlaceholderText("Genre (Cth: Action, Sci-Fi)")
-
-        self.year_input = QLineEdit()
-        self.year_input.setPlaceholderText("Tahun (Cth: 1999)")
-
-        self.duration_input = QLineEdit()
-        self.duration_input.setPlaceholderText("Durasi Menit (Cth: 136)")
-
-        self.poster_input = QLineEdit()
-        self.poster_input.setPlaceholderText("URL Poster Gambar")
-
-        self.language_input = QLineEdit()
-        self.language_input.setPlaceholderText("Bahasa (Cth: Indonesia, Inggris)")
-        self.language_input.setText("Inggris")
-
-        self.format_input = QLineEdit()
-        self.format_input.setPlaceholderText("Format (Cth: HD · HLS Stream)")
-        self.format_input.setText("HD · HLS Stream")
-
-        self.subtitle_check = QCheckBox("Subtitle Tersedia")
-        self.subtitle_check.setChecked(True)
-        self.subtitle_check.setStyleSheet("color: white; padding: 4px 0;")
-
-        self.file_path = None
-        self.btn_select_file = QPushButton("📁 Pilih Video Mentah (.mp4 / .mkv)")
-        self.btn_select_file.setStyleSheet("background-color: #24243a; padding: 10px; border-radius: 5px;")
-        self.btn_select_file.clicked.connect(self.select_file)
-
-        self.lbl_file_name = QLabel("Belum ada file dipilih.")
-        self.lbl_file_name.setStyleSheet("color: #888899; font-size: 11px;")
-
+        file_layout = QHBoxLayout()
+        self.txt_file_path = QLineEdit()
+        self.txt_file_path.setPlaceholderText("Pilih video sumber...")
+        btn_browse = QPushButton("Browse")
+        btn_browse.clicked.connect(self.browse_video)
+        file_layout.addWidget(self.txt_file_path)
+        file_layout.addWidget(btn_browse)
+        layout.addLayout(file_layout)
+        
         self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 0)
-        self.progress_bar.setVisible(False)
-
-        self.btn_start = QPushButton("🚀 Mulai Konversi & Simpan")
-        self.btn_start.setStyleSheet("background-color: #ff0043; font-weight: bold; padding: 12px; border-radius: 5px;")
-        self.btn_start.clicked.connect(self.start_conversion)
-
-        for widget in [self.title_input, self.desc_input, self.genre_input, 
-                       self.year_input, self.duration_input, self.poster_input,
-                       self.language_input, self.format_input]:
-            widget.setStyleSheet("padding: 8px; border: 1px solid #2e2e44; border-radius: 4px; background: #0f0f13;")
-            layout.addWidget(widget)
-
-        layout.addWidget(self.subtitle_check)
-
-        layout.addWidget(self.btn_select_file)
-        layout.addWidget(self.lbl_file_name)
-        layout.addSpacing(10)
         layout.addWidget(self.progress_bar)
-        layout.addWidget(self.btn_start)
+        
+        self.lbl_status = QLabel("Status: Menunggu...")
+        layout.addWidget(self.lbl_status)
+        
+        # Tombol Aksi
+        btn_layout = QHBoxLayout()
+        self.btn_start = QPushButton("Mulai Konversi")
+        self.btn_start.setObjectName("btn-accent")
+        self.btn_start.clicked.connect(self.start_conversion)
+        
+        self.btn_cancel = QPushButton("Batalkan & Hapus")
+        self.btn_cancel.setObjectName("btn-danger")
+        self.btn_cancel.setEnabled(False)
+        self.btn_cancel.clicked.connect(self.cancel_conversion)
+        
+        btn_layout.addWidget(self.btn_start)
+        btn_layout.addWidget(self.btn_cancel)
+        layout.addLayout(btn_layout)
 
-        self.setLayout(layout)
-
-    def select_file(self):
-        file_name, _ = QFileDialog.getOpenFileName(self, "Pilih Video", "", "Video Files (*.mp4 *.mkv *.avi)")
-        if file_name:
-            self.file_path = file_name
-            self.lbl_file_name.setText(os.path.basename(file_name))
+    def browse_video(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Pilih Video", "", "Video (*.mp4 *.mkv)")
+        if file_path:
+            self.txt_file_path.setText(file_path)
+            if not self.txt_title.text():
+                self.txt_title.setText(os.path.splitext(os.path.basename(file_path))[0])
 
     def start_conversion(self):
-        if not self.file_path or not self.title_input.text():
-            QMessageBox.warning(self, "Peringatan", "Pilih file video dan isi Judul Film!")
-            return
-
+        if not self.txt_file_path.text(): return
         self.btn_start.setEnabled(False)
-        self.btn_start.setText("Memproses Konversi... Harap Tunggu")
-        self.progress_bar.setVisible(True)
-
-        self.worker = FFmpegWorker(self.file_path, self.title_input.text())
-        self.worker.finished.connect(self.on_conversion_finished)
+        self.btn_cancel.setEnabled(True)
+        self.lbl_status.setText("Memproses...")
+        self.worker = FFmpegWorker(self.txt_file_path.text(), self.txt_title.text())
+        self.worker.progress.connect(lambda val: self.progress_bar.setValue(val))
+        self.worker.finished.connect(self.on_finished)
         self.worker.start()
 
-    def on_conversion_finished(self, success, message, hls_path):
-        self.progress_bar.setVisible(False)
-        self.btn_start.setEnabled(True)
-        self.btn_start.setText("🚀 Mulai Konversi & Simpan")
+    def cancel_conversion(self):
+        if hasattr(self, 'worker') and self.worker.isRunning():
+            self.lbl_status.setText("Membatalkan proses dan membersihkan folder...")
+            self.worker.stop()
+            self.worker.wait()
+            self.accept()
 
+    def on_finished(self, success, msg, path):
+        self.btn_start.setEnabled(True)
+        self.btn_cancel.setEnabled(False)
         if success:
-            self.save_to_database(hls_path)
-            QMessageBox.information(self, "Sukses!", "Film berhasil dikonversi dan masuk katalog!")
+            QMessageBox.information(self, "Sukses", f"{msg}\nDisimpan di: {path}")
             self.accept()
         else:
-            QMessageBox.critical(self, "Gagal", message)
+            QMessageBox.warning(self, "Berhenti", msg)
 
-    # FIX: method ini sebelumnya di luar class (indentasi salah)
-    def save_to_database(self, hls_path):
-        try:
-            from database import add_film
-            year_val     = self.year_input.text().strip()
-            duration_val = self.duration_input.text().strip()
-            add_film(
-                title       = self.title_input.text().strip(),
-                description = self.desc_input.text().strip() or "Deskripsi tidak tersedia.",
-                genre       = self.genre_input.text().strip() or "Film",
-                year        = int(year_val) if year_val.isdigit() else 2026,
-                duration    = int(duration_val) if duration_val.isdigit() else 0,
-                poster_url  = self.poster_input.text().strip() or "",
-                hls_path    = hls_path,
-                format      = self.format_input.text().strip() or "HD · HLS Stream",
-                language    = self.language_input.text().strip() or "Inggris",
-                has_subtitle= 1 if self.subtitle_check.isChecked() else 0,
-            )
-        except Exception as e:
-            print(f"Gagal menyimpan ke DB: {e}")
-
-# ── Dialog UI: Tambah Film Manual ────────────────────────────────────────────
-class AddFilmDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("CineStream - Tambah Film Manual")
-        self.setFixedSize(350, 560)
-        self.setStyleSheet("""
-            QDialog { background-color: #121212; color: white; }
-            QLabel { color: #E0E0E0; font-family: 'Segoe UI'; margin-top: 5px; }
-            QLineEdit { background-color: #1E1E1E; border: 1px solid #333; border-radius: 5px; padding: 5px; color: white; }
-            QLineEdit:focus { border: 1px solid #E50914; }
-            QPushButton { background-color: #E50914; color: white; border: none; border-radius: 5px; padding: 8px; font-weight: bold; }
-            QPushButton:hover { background-color: #B20710; }
-            QCheckBox { color: #E0E0E0; padding: 4px 0; }
-        """)
-
-        layout = QVBoxLayout(self)
-
-        self.title_input = QLineEdit()
-        layout.addWidget(QLabel("Judul Film *"))
-        layout.addWidget(self.title_input)
-
-        self.desc_input = QLineEdit()
-        layout.addWidget(QLabel("Deskripsi"))
-        layout.addWidget(self.desc_input)
-
-        self.genre_input = QLineEdit()
-        layout.addWidget(QLabel("Genre"))
-        layout.addWidget(self.genre_input)
-
-        self.hls_input = QLineEdit()
-        self.hls_input.setPlaceholderText("contoh: nama_folder/index.m3u8")
-        layout.addWidget(QLabel("Path HLS * (Wajib sesuai folder)"))
-        layout.addWidget(self.hls_input)
-
-        self.poster_input = QLineEdit()
-        layout.addWidget(QLabel("URL Poster"))
-        layout.addWidget(self.poster_input)
-
-        self.language_input = QLineEdit()
-        self.language_input.setText("Inggris")
-        layout.addWidget(QLabel("Bahasa"))
-        layout.addWidget(self.language_input)
-
-        self.format_input = QLineEdit()
-        self.format_input.setText("HD · HLS Stream")
-        layout.addWidget(QLabel("Format"))
-        layout.addWidget(self.format_input)
-
-        self.subtitle_check = QCheckBox("Subtitle Tersedia")
-        self.subtitle_check.setChecked(True)
-        layout.addWidget(self.subtitle_check)
-
-        submit_btn = QPushButton("Simpan ke Database")
-        submit_btn.clicked.connect(self.save_film)
-        layout.addWidget(submit_btn)
-
-    def save_film(self):
-        title    = self.title_input.text().strip()
-        hls_path = self.hls_input.text().strip()
-
-        if not title or not hls_path:
-            QMessageBox.warning(self, "Error", "Judul dan Path HLS wajib diisi!")
-            return
-
-        try:
-            from database import add_film
-            add_film(
-                title       = title,
-                description = self.desc_input.text() or "Deskripsi tidak tersedia.",
-                genre       = self.genre_input.text() or "Film",
-                year        = 2026,
-                duration    = 0,
-                poster_url  = self.poster_input.text() or "",
-                hls_path    = hls_path,
-                format      = self.format_input.text().strip() or "HD · HLS Stream",
-                language    = self.language_input.text().strip() or "Inggris",
-                has_subtitle= 1 if self.subtitle_check.isChecked() else 0,
-            )
-            QMessageBox.information(self, "Sukses", f"Film '{title}' berhasil ditambahkan ke katalog!")
-            self.accept()
-        except Exception as e:
-            QMessageBox.critical(self, "Database Error", str(e))
-
-# ── UI Menu Tray Taskbar ─────────────────────────────────────────────────────
-class ModernTrayMenu(QWidget):
-    def __init__(self, tray_icon_el):
+# ── DASHBOARD UTAMA (SPLIT TABS) ──
+class CineStreamDashboard(QMainWindow):
+    def __init__(self):
         super().__init__()
-        self.tray_icon_el = tray_icon_el
+        self.setWindowTitle("CineStream Infrastructure Manager")
+        self.resize(1150, 720)
+        self.local_ip = self.get_local_ip()
         
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | 
-                            Qt.WindowType.WindowStaysOnTopHint | 
-                            Qt.WindowType.SubWindow)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        
-        self.local_ip = get_local_ip()
-        self.init_ui()
-
-    def init_ui(self):
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(15, 15, 15, 15)
-        
-        container = QWidget()
-        container.setObjectName("Container")
-        container.setStyleSheet("""
-            QWidget#Container { background-color: #121212; border: 1px solid #282828; border-radius: 12px; }
-            QLabel { font-family: 'Segoe UI'; color: #FFFFFF; }
-            QPushButton { background-color: #1E1E1E; color: #E0E0E0; border: 1px solid #2D2D2D; border-radius: 6px; padding: 10px 14px; text-align: left; }
-            QPushButton:hover { background-color: #2A2A2A; color: #FFFFFF; border-color: #404040; }
+        self.setStyleSheet("""
+            QMainWindow, QTabWidget::pane { background-color: #0a0b10; border: none; }
+            QWidget { color: #e8e8f0; font-family: 'Segoe UI'; }
+            QTabBar::tab { background: #161823; border: 1px solid #2a2d3e; padding: 10px 25px; margin-right: 2px; font-weight: bold; border-top-left-radius: 6px; border-top-right-radius: 6px; }
+            QTabBar::tab:selected { background: #ff0043; color: white; border-color: #ff0043; }
+            QPushButton { background-color: #161823; border: 1px solid #2a2d3e; border-radius: 6px; padding: 10px; font-weight: bold; }
+            QPushButton:hover { background-color: #222534; border-color: #ff0043; }
+            QPushButton#btn-accent { background-color: #ff0043; color: white; border: none; }
+            QPushButton#btn-danger { background-color: #3a121a; color: #ff3366; }
+            QTableWidget { background-color: #161823; border: 1px solid #2a2d3e; border-radius: 8px; }
+            QHeaderView::section { background-color: #1c1e2e; color: #ff0043; padding: 8px; font-weight: bold; }
+            /* Stat Card */
+            .StatCard { background-color: #141520; border: 1px solid #222435; border-radius: 10px; padding: 15px; }
         """)
+
+        # Main Tab Layout
+        self.tabs = QTabWidget()
+        self.setCentralWidget(self.tabs)
         
-        container_layout = QVBoxLayout(container)
+        # TAB 1: SERVER MONITORING
+        self.tab_monitor = QWidget()
+        self.setup_monitor_tab()
+        self.tabs.addTab(self.tab_monitor, "📊 Server Monitoring")
         
-        header = QLabel("<b>CineStream Server</b><br><span style='color:#2ECC71;'>● Nginx & Flask Aktif</span>")
-        container_layout.addWidget(header)
+        # TAB 2: DATABASE MANAGEMENT
+        self.tab_database = QWidget()
+        self.setup_database_tab()
+        self.tabs.addTab(self.tab_database, "🗄️ Database Management")
+
+        # Timer Fetch Realtime Data (Tiap 2 Detik)
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_live_metrics)
+        self.timer.start(2000)
+
+    def setup_monitor_tab(self):
+        layout = QVBoxLayout(self.tab_monitor)
+        layout.setContentsMargins(30, 30, 30, 30)
         
-        btn_open = QPushButton("🌐  Buka di Browser")
-        btn_open.clicked.connect(self.action_open)
-        container_layout.addWidget(btn_open)
-
-        btn_copy = QPushButton(f"🔗  Salin IP Jaringan ({self.local_ip})")
-        btn_copy.clicked.connect(lambda: copy_to_clipboard(f"http://{self.local_ip}:8080"))
-        container_layout.addWidget(btn_copy)
+        lbl_title = QLabel("Server Real-time Status")
+        lbl_title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        layout.addWidget(lbl_title)
         
-        btn_status = QPushButton("📊  Status Server")
-        btn_status.clicked.connect(self.action_show_status)
-        container_layout.addWidget(btn_status)
-
-        line = QWidget(); line.setFixedHeight(1); line.setStyleSheet("background-color: #282828;")
-        container_layout.addWidget(line)
-
-        # Tombol Baru Diaktifkan di Sini
-        btn_upload = QPushButton("🚀  Upload & Konversi Video")
-        btn_upload.clicked.connect(self.action_upload_film)
-        btn_upload.setStyleSheet("color: #ff0043; font-weight: bold;")
-        container_layout.addWidget(btn_upload)
-
-        btn_add = QPushButton("📁  Tambah Data (Manual)")
-        btn_add.clicked.connect(self.action_add_film)
-        container_layout.addWidget(btn_add)
+        # Grid Statistik
+        grid = QGridLayout()
+        grid.setSpacing(20)
         
-        btn_quit = QPushButton("❌  Keluar")
-        btn_quit.clicked.connect(self.action_quit)
-        container_layout.addWidget(btn_quit)
+        # Cards
+        self.lbl_ip = self.create_stat_card("Alamat IP Jaringan", self.local_ip, grid, 0, 0)
+        self.lbl_uptime = self.create_stat_card("Server Uptime", "00:00:00", grid, 0, 1)
+        self.lbl_users = self.create_stat_card("User Online Saat Ini", "0 Orang", grid, 1, 0)
+        self.lbl_rooms = self.create_stat_card("Watch Party Aktif", "0 Room", grid, 1, 1)
+        self.lbl_cpu = self.create_stat_card("Penggunaan CPU", "0%", grid, 2, 0)
+        self.lbl_ram = self.create_stat_card("Penggunaan RAM", "0%", grid, 2, 1)
         
-        main_layout.addWidget(container)
-        self.setLayout(main_layout)
-        self.setFixedSize(300, 370) # Sedikit diperpanjang untuk tombol baru
+        layout.addLayout(grid)
+        layout.addStretch()
 
-    def position_at_tray(self):
-        tray_geo = self.tray_icon_el.geometry()
-        pos = tray_geo.topLeft()
-        self.move(pos.x() - self.width() + 30, pos.y() - self.height() - 5)
+        btn_quit = QPushButton("❌ Matikan Keseluruhan Server")
+        btn_quit.setObjectName("btn-danger")
+        btn_quit.clicked.connect(self.shutdown)
+        layout.addWidget(btn_quit)
 
-    def show_toggle(self, reason):
-        if reason in (QSystemTrayIcon.ActivationReason.Trigger, QSystemTrayIcon.ActivationReason.Context):
-            if self.isVisible(): self.hide()
-            else: self.position_at_tray(); self.show(); self.activateWindow()
+    def create_stat_card(self, title, default_val, grid, row, col):
+        card = QWidget()
+        card.setProperty("class", "StatCard")
+        cl = QVBoxLayout(card)
+        lbl_t = QLabel(title)
+        lbl_t.setStyleSheet("color: #888899; font-weight: bold; font-size: 11px;")
+        lbl_v = QLabel(default_val)
+        lbl_v.setStyleSheet("color: white; font-size: 20px; font-weight: bold;")
+        cl.addWidget(lbl_t)
+        cl.addWidget(lbl_v)
+        grid.addWidget(card, row, col)
+        return lbl_v
 
-    def action_open(self):
-        webbrowser.open(f"http://localhost:8080")
-        self.hide()
+    def setup_database_tab(self):
+        layout = QVBoxLayout(self.tab_database)
+        layout.setContentsMargins(30, 30, 30, 30)
+        
+        # Navbar Database
+        nav = QHBoxLayout()
+        lbl_title = QLabel("Katalog Data Film")
+        lbl_title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        nav.addWidget(lbl_title)
+        
+        btn_add = QPushButton("➕ Tambah Film")
+        btn_add.setObjectName("btn-accent")
+        btn_add.clicked.connect(self.action_add_film) # Anggap dialog AddFilmAutoDialog sdh ada
+        nav.addWidget(btn_add)
+        
+        btn_conv = QPushButton("🎬 Konversi Video (FFmpeg)")
+        btn_conv.clicked.connect(lambda: ConvertVideoDialog(self).exec())
+        nav.addWidget(btn_conv)
+        layout.addLayout(nav)
+        
+        # Table
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["ID", "Judul Film", "Genre", "Tahun", "Aksi"])
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.table)
+        self.refresh_table()
 
-    def action_show_status(self):
-        cpu = psutil.cpu_percent()
-        ram = psutil.virtual_memory().percent
-        QMessageBox.information(
-            self, 
-            "Status Server CineStream", 
-            f"⚡ Koneksi: Stabil\n"
-            f"🧠 Penggunaan CPU: {cpu}%\n"
-            f"💾 Penggunaan RAM: {ram}%\n"
-            f"📂 Mode: Nginx Reverse Proxy (Port 8080)\n"
-            f"Socket.IO siap menerima Watch Party."
-        )
+    def get_local_ip(self):
+        import socket
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+        except: return "127.0.0.1"
 
-    def action_upload_film(self):
-        self.hide() 
-        dialog = UploadConvertDialog(self)
-        dialog.exec()
+    def update_live_metrics(self):
+        # Update Hardware
+        try:
+            self.lbl_cpu.setText(f"{psutil.cpu_percent()}%")
+            self.lbl_ram.setText(f"{psutil.virtual_memory().percent}%")
+        except: pass
+        
+        # Update API Flask (Uptime, Users, Rooms)
+        try:
+            res = requests.get(f"http://127.0.0.1:{FLASK_PORT}/api/status", timeout=1)
+            if res.status_code == 200:
+                data = res.json()
+                sec = data['uptime']
+                self.lbl_uptime.setText(f"{sec//3600:02}:{(sec%3600)//60:02}:{sec%60:02}")
+                self.lbl_users.setText(f"{data['users']} Orang")
+                self.lbl_rooms.setText(f"{data['rooms']} Room")
+        except: pass
+
+    def refresh_table(self):
+        self.table.setRowCount(0)
+        for i, f in enumerate(get_all_films()):
+            self.table.insertRow(i)
+            self.table.setItem(i, 0, QTableWidgetItem(str(f['id'])))
+            self.table.setItem(i, 1, QTableWidgetItem(f['title']))
+            self.table.setItem(i, 2, QTableWidgetItem(f['genre'] or "-"))
+            self.table.setItem(i, 3, QTableWidgetItem(str(f['year'] or "-")))
+            
+            btn_del = QPushButton("Hapus")
+            btn_del.setObjectName("btn-danger")
+            btn_del.clicked.connect(lambda checked, fid=f['id']: self.delete_film_action(fid))
+            self.table.setCellWidget(i, 4, btn_del)
 
     def action_add_film(self):
-        self.hide() 
-        dialog = AddFilmDialog(self)
-        dialog.exec()
+        # Panggil class AddFilmAutoDialog Anda dari kode sebelumnya di sini
+        pass
 
-    def action_quit(self):
-        QApplication.quit()
-        os._exit(0)
+    def delete_film_action(self, fid):
+        if QMessageBox.question(self, "Hapus", "Yakin hapus film?") == QMessageBox.StandardButton.Yes:
+            delete_film(fid)
+            self.refresh_table()
 
-    def changeEvent(self, event):
-        if event.type() == event.Type.ActivationChange and not self.isActiveWindow():
-            self.hide()
+    def shutdown(self):
+        if QMessageBox.question(self, "Shutdown", "Matikan semua layanan?") == QMessageBox.StandardButton.Yes:
+            QApplication.quit()
+            os._exit(0)
 
-# ── Main Entry Execution ─────────────────────────────────────────────────────
 def main():
-    if not check_database_health():
-        print("[❌] Inisialisasi dibatalkan karena kegagalan struktur database.")
-        sys.exit(1)
-
+    init_db()
     app = QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(False)
-    
-    server_thread = threading.Thread(target=run_flask, daemon=True, name='CineStream-Flask-Engine')
-    server_thread.start()
-    
-    tray_icon = QSystemTrayIcon(create_tray_icon(), app)
-    tray_icon.setToolTip("CineStream Infrastructure Core")
-    
-    menu_window = ModernTrayMenu(tray_icon)
-    tray_icon.activated.connect(menu_window.show_toggle)
-    
-    tray_icon.show()
-    
-    print(f"[🚀] Server aktif. Mengalihkan visual utama ke http://localhost:{NGINX_PORT}")
-    threading.Timer(2.0, lambda: webbrowser.open(f"http://localhost:{NGINX_PORT}")).start()
-    
+    threading.Thread(target=run_flask, daemon=True).start()
+    dashboard = CineStreamDashboard()
+    dashboard.show()
     sys.exit(app.exec())
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

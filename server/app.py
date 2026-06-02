@@ -3,9 +3,12 @@ import time
 from flask import Flask, jsonify, request, send_from_directory
 from flask_socketio import SocketIO, join_room, leave_room, emit
 
-from database import init_db, get_films, get_film, create_room, get_room, deactivate_room
+from database import init_db, get_films, get_film, create_room, get_room,  deactivate_room, delete_room
 
 socketio = SocketIO(cors_allowed_origins='*', async_mode='threading')
+
+SERVER_START_TIME = time.time()
+active_users = set()  # Menyimpan Session ID user yang sedang online
 
 # State room disimpan di memory (di luar create_app agar persisten)
 room_states = {}
@@ -68,6 +71,14 @@ def create_app():
             'updated_at':   time.time(),
         }
         return jsonify({'room_code': code})
+    
+    @app.route('/api/status')
+    def api_status():
+        return jsonify({
+            'uptime': int(time.time() - SERVER_START_TIME),
+            'users': len(active_users),
+            'rooms': len(room_states)
+        })
 
     # FIX 2: Route statis /active harus didaftarkan SEBELUM route dinamis /<room_code>
     # agar Flask tidak salah mencocokkan "active" sebagai nilai room_code
@@ -139,19 +150,29 @@ def create_app():
                 'current_time': state['current_time'],
             })
 
+    @socketio.on('connect')
+    def handle_connect():
+        active_users.add(request.sid)
+
     @socketio.on('disconnect')
-    def on_disconnect():
-        for code, users in room_users.items():
-            for u in list(users):
-                if u['sid'] == request.sid:
-                    users.remove(u)
-                    leave_room(code)
-                    emit('user_list_update', users, to=code)
-                    emit('system_message', {
-                        'message':   f"{u['username']} telah terputus.",
-                        'timestamp': time.time(),
-                    }, to=code)
-                    break
+    def handle_disconnect():
+        sid = request.sid
+        active_users.discard(sid)
+        
+        # Cari apakah yang keluar adalah Host dari suatu Room
+        for code, users in list(room_users.items()):
+            for user in users:
+                if user['sid'] == sid and user.get('is_host'):
+                    # Jika Host keluar, usir semua penonton dan hapus room!
+                    emit('room_closed', {'message': 'Host telah keluar. Watch Party dihentikan.'}, to=code)
+                    delete_room(code)
+                    room_states.pop(code, None)
+                    room_users.pop(code, None)
+                    return
+            
+            # Jika yang keluar cuma penonton biasa, hapus dia dari daftar
+            room_users[code] = [u for u in users if u['sid'] != sid]
+            emit('user_list', room_users[code], to=code)
 
     @socketio.on('chat_message')
     def on_chat(data):

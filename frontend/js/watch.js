@@ -29,70 +29,81 @@ const video = document.getElementById("video");
 let socket = null;
 let isIgnoringEvents = false;
 
-// ENFORCE HOST ONLY CONTROLS
+// ── PERBAIKAN: KONTROL HOST & AKSES FULLSCREEN GUEST ──
 if (!IS_HOST && ROOM_CODE) {
-  // Hilangkan menu pemutar (play/pause/timeline) agar penonton tidak bisa mengatur video
-  video.removeAttribute("controls");
-  video.style.pointerEvents = "none"; // Cegah klik ganda di layar
+  // 1. Sembunyikan UI kontrol bawaan agar tidak ada tombol play/timeline
+  video.controls = false;
+
+  // 2. Izinkan klik ganda pada layar untuk masuk/keluar dari mode Fullscreen
+  video.addEventListener("dblclick", () => {
+    if (!document.fullscreenElement) {
+      if (video.requestFullscreen) video.requestFullscreen();
+      else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen();
+      else if (video.msRequestFullscreen) video.msRequestFullscreen();
+    } else {
+      if (document.exitFullscreen) document.exitFullscreen();
+    }
+  });
+
+  // 3. Cegah penonton melakukan play secara manual (spasi/klik)
+  video.addEventListener("play", (e) => {
+    if (isIgnoringEvents) return; // Abaikan jika ini adalah instruksi sinkronisasi dari Host
+    e.preventDefault();
+    video.pause();
+    showToast("Hanya Host yang dapat memulai film.");
+  });
+
+  // 4. Cegah penonton melakukan pause secara manual (spasi/klik)
+  video.addEventListener("pause", (e) => {
+    if (isIgnoringEvents) return;
+    e.preventDefault();
+    video.play().catch(() => {});
+    showToast("Hanya Host yang dapat menjeda film.");
+  });
+} else {
+  // Host memiliki kontrol penuh
+  video.controls = true;
 }
 
-async function initWatchPage() {
-  if (ROOM_CODE) {
-    await loadFilmDetailsByRoom(ROOM_CODE);
-    initSocketConnection();
-  } else if (FILM_ID) {
-    await loadDirectFilmDetails(FILM_ID);
-    setSyncStatus(true, "Mode Tonton Mandiri (Offline Chat)");
-    document.getElementById("user-list").innerHTML =
-      "<li>👤 Anda (Mandiri)</li>";
-  } else {
-    window.location.href = "/";
-  }
+// ── Logika Fetch Data Film ──
+if (FILM_ID) {
+  fetch(`/api/films/${FILM_ID}`)
+    .then((res) => res.json())
+    .then((film) => {
+      document.getElementById("film-title").textContent = film.title;
+      document.getElementById("film-meta").textContent =
+        `${film.year} • ${film.genre} • ${film.format}`;
+      document.getElementById("film-desc").textContent = film.description;
+
+      if (Hls.isSupported()) {
+        const hls = new Hls();
+        hls.loadSource(`/hls/${film.id}/index.m3u8`);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (!ROOM_CODE) {
+            video.play().catch((e) => console.log("Autoplay dicegah browser"));
+          }
+        });
+      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = `/hls/${film.id}/index.m3u8`;
+        video.addEventListener("loadedmetadata", () => {
+          if (!ROOM_CODE) video.play();
+        });
+      }
+    });
+} else {
+  showToast("ID Film tidak valid!");
 }
 
-async function loadDirectFilmDetails(id) {
-  const res = await fetch(`/api/films/${id}`);
-  if (!res.ok) window.location.href = "/";
-  setupVideoPlayer(await res.json());
-}
+// ── Logika Watch Party (Socket.IO) ──
+if (ROOM_CODE) {
+  document.getElementById("party-panel").style.display = "flex";
+  document.getElementById("party-code").textContent = ROOM_CODE;
 
-async function loadFilmDetailsByRoom(code) {
-  const res = await fetch(`/api/rooms/${code}`);
-  if (!res.ok) {
-    alert("Room tidak ditemukan!");
-    window.location.href = "/";
-    return;
-  }
-  const roomData = await res.json();
-
-  document.getElementById("display-room-code").textContent = roomData.room_code;
-  document.getElementById("display-host").textContent = roomData.host_name;
-  document.getElementById("display-role").textContent = IS_HOST
-    ? "Pembuat Room (Host)"
-    : "Peserta Tontonan";
-
-  setupVideoPlayer(roomData);
-}
-
-function setupVideoPlayer(mediaSource) {
-  document.getElementById("video-title").textContent = mediaSource.title;
-  const hlsUrl = `/media/hls/${mediaSource.hls_path}`;
-
-  if (Hls.isSupported()) {
-    const hls = new Hls();
-    hls.loadSource(hlsUrl);
-    hls.attachMedia(video);
-  } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-    video.src = hlsUrl;
-  }
-  setupLocalVideoEvents();
-}
-
-function initSocketConnection() {
-  socket = io(window.location.origin, { transports: ["websocket"] });
+  socket = io();
 
   socket.on("connect", () => {
-    setSyncStatus(true, "Terhubung ke Watch Party");
+    setSyncStatus(true, "Terhubung ke Party");
     socket.emit("join_room", {
       room_code: ROOM_CODE,
       username: USERNAME,
@@ -101,118 +112,111 @@ function initSocketConnection() {
   });
 
   socket.on("disconnect", () => {
-    setSyncStatus(false, "Koneksi terputus!");
+    setSyncStatus(false, "Terputus. Menghubungkan ulang...");
   });
 
-  // Menerima data daftar penonton real-time
-  socket.on("user_list_update", (users) => {
-    document.getElementById("user-count").textContent = users.length;
+  socket.on("user_list", (users) => {
     const list = document.getElementById("user-list");
     list.innerHTML = users
       .map(
-        (u) => `<li class="${u.is_host ? "host" : ""}">👤 ${u.username}</li>`,
+        (u) =>
+          `<li class="${u.is_host ? "host" : ""}">${
+            u.username === USERNAME ? `<b>${u.username} (Kamu)</b>` : u.username
+          }</li>`,
       )
       .join("");
+    document.getElementById("user-count").textContent = users.length;
   });
 
-  socket.on("system_message", (data) => addSystemMessage(data.message));
-  socket.on("chat_message", (data) =>
-    renderIncomingChat(data.username, data.message),
-  );
-
-  // Menerima sinkronisasi awal saat baru masuk
-  socket.on("sync_state", (data) => {
-    if (IS_HOST) return;
-    ignoreLocalVideoEvents(() => {
-      video.currentTime = data.current_time;
-      if (data.is_playing) video.play().catch(() => {});
-      else video.pause();
-    });
+  socket.on("chat_message", (data) => {
+    appendChat(data.username, data.message, data.username === USERNAME);
   });
 
-  // Menerima perintah dari Host
+  socket.on("system_message", (data) => {
+    addSystemMessage(data.message);
+  });
+
+  // PERBAIKAN: Ketika Host keluar, tutup room dan tendang penonton
+  socket.on("room_closed", (data) => {
+    showToast(data.message || "Host telah keluar. Room Watch Party ditutup.");
+    isIgnoringEvents = true; // Kunci video
+    video.pause();
+    setTimeout(() => {
+      window.location.href = "/";
+    }, 2500);
+  });
+
+  // ── Sync Handler ──
   socket.on("video_play", (data) => {
-    if (IS_HOST) return;
-    ignoreLocalVideoEvents(() => {
-      video.currentTime = data.current_time;
-      video.play().catch(() => {});
-    });
+    isIgnoringEvents = true;
+    const diff = Math.abs(video.currentTime - data.current_time);
+    if (diff > 1.5) video.currentTime = data.current_time;
+    video.play().catch((e) => console.log(e));
+    setTimeout(() => (isIgnoringEvents = false), 500);
   });
 
   socket.on("video_pause", (data) => {
-    if (IS_HOST) return;
-    ignoreLocalVideoEvents(() => {
-      video.currentTime = data.current_time;
-      video.pause();
-    });
+    isIgnoringEvents = true;
+    video.currentTime = data.current_time;
+    video.pause();
+    setTimeout(() => (isIgnoringEvents = false), 500);
   });
 
   socket.on("video_seek", (data) => {
-    if (IS_HOST) return;
-    ignoreLocalVideoEvents(() => {
-      video.currentTime = data.current_time;
-    });
+    isIgnoringEvents = true;
+    video.currentTime = data.current_time;
+    setTimeout(() => (isIgnoringEvents = false), 500);
   });
-}
 
-function setupLocalVideoEvents() {
-  video.addEventListener("play", () => {
-    if (!ROOM_CODE || isIgnoringEvents || !IS_HOST) return;
-    socket.emit("video_play", {
-      room_code: ROOM_CODE,
-      current_time: video.currentTime,
+  // ── Host Broadcaster ──
+  if (IS_HOST) {
+    video.addEventListener("play", () => {
+      if (isIgnoringEvents) return;
+      socket.emit("video_play", {
+        room_code: ROOM_CODE,
+        current_time: video.currentTime,
+      });
     });
-  });
-  video.addEventListener("pause", () => {
-    if (!ROOM_CODE || isIgnoringEvents || !IS_HOST) return;
-    socket.emit("video_pause", {
-      room_code: ROOM_CODE,
-      current_time: video.currentTime,
-    });
-  });
-  video.addEventListener("seeked", () => {
-    if (!ROOM_CODE || isIgnoringEvents || !IS_HOST) return;
-    socket.emit("video_seek", {
-      room_code: ROOM_CODE,
-      current_time: video.currentTime,
-    });
-  });
-}
 
-function ignoreLocalVideoEvents(callback) {
-  isIgnoringEvents = true;
-  callback();
-  setTimeout(() => {
-    isIgnoringEvents = false;
-  }, 400);
-}
-
-// PERBAIKAN BUG CHAT DI SINI
-function sendChatMessage(event) {
-  event.preventDefault();
-  const input = document.getElementById("chat-input");
-  const msg = input.value.trim(); // Menggunakan .value, bukan .text()
-  if (!msg) return;
-
-  if (ROOM_CODE && socket) {
-    socket.emit("chat_message", {
-      room_code: ROOM_CODE,
-      username: USERNAME,
-      message: msg,
+    video.addEventListener("pause", () => {
+      if (isIgnoringEvents) return;
+      socket.emit("video_pause", {
+        room_code: ROOM_CODE,
+        current_time: video.currentTime,
+      });
     });
-    renderIncomingChat("Anda", msg, true);
-  } else {
-    renderIncomingChat("Anda", msg, true);
+
+    video.addEventListener("seeked", () => {
+      if (isIgnoringEvents) return;
+      socket.emit("video_seek", {
+        room_code: ROOM_CODE,
+        current_time: video.currentTime,
+      });
+    });
   }
-  input.value = "";
 }
 
-function renderIncomingChat(sender, message, isMe = false) {
+// ── Chat & UI ──
+const chatInput = document.getElementById("chat-input");
+chatInput.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") sendChat();
+});
+
+function sendChat() {
+  const msg = chatInput.value.trim();
+  if (msg && socket) {
+    socket.emit("chat_message", { room_code: ROOM_CODE, message: msg });
+    chatInput.value = "";
+  }
+}
+
+function appendChat(sender, msg, isMe) {
   const box = document.getElementById("chat-messages");
   const el = document.createElement("div");
   el.className = `chat-msg ${isMe ? "me" : ""}`;
-  const safeMsg = message.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  el.innerHTML = `<div class="user">${sender}</div><div>${safeMsg}</div>`;
+
+  const safeMsg = msg.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  el.innerHTML = `<div class="sender">${sender}</div><div>${safeMsg}</div>`;
   box.appendChild(el);
   box.scrollTop = box.scrollHeight;
   if (!isMe) switchTab("chat");
@@ -251,13 +255,13 @@ function setSyncStatus(connected, text) {
 
 function copyRoomCode() {
   if (!ROOM_CODE) return;
-  navigator.clipboard.writeText(ROOM_CODE).then(() => {
-    const btn = document.getElementById("btn-copy-code");
-    btn.textContent = "✅ Tersalin!";
-    setTimeout(() => {
-      btn.textContent = "📋 Salin Kode";
-    }, 2000);
-  });
+  navigator.clipboard.writeText(ROOM_CODE);
+  showToast("Kode Room disalin: " + ROOM_CODE);
 }
 
-initWatchPage();
+function showToast(msg) {
+  const toast = document.getElementById("toast");
+  toast.textContent = msg;
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), 3000);
+}

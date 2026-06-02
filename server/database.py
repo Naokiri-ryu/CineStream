@@ -159,3 +159,29 @@ def deactivate_room(room_code):
     conn.execute('UPDATE rooms SET is_active = 0 WHERE room_code = ?', (room_code,))
     conn.commit()
     conn.close()
+
+def get_all_films():
+    conn = get_db()
+    rows = conn.execute('SELECT * FROM films ORDER BY id DESC').fetchall()
+    conn.close()
+    return rows
+
+def delete_film(film_id):
+    conn = get_db()
+    # 1. Ambil path HLS untuk nanti dihapus berkas fisiknya jika diperlukan
+    film = conn.execute('SELECT hls_path FROM films WHERE id = ?', (film_id,)).fetchone()
+    if film:
+        # 2. Hapus data dari database
+        conn.execute('DELETE FROM films WHERE id = ?', (film_id,))
+        conn.commit()
+        conn.close()
+        return True, film['hls_path']
+    conn.close()
+    return False, ""
+
+def delete_room(room_code):
+    """Menghapus data room dari database agar tidak menumpuk."""
+    conn = get_db()
+    conn.execute('DELETE FROM rooms WHERE room_code = ?', (room_code,))
+    conn.commit()
+    conn.close()

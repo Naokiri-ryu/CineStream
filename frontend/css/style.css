@@ -614,3 +614,21 @@ main {
   margin-left: auto;
   letter-spacing: 1px;
 }
+
+/* ── Responsivitas Layar Smartphone ── */
+@media (max-width: 600px) {
+  .film-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+  }
+  .film-title {
+    font-size: 13px;
+  }
+  .film-info {
+    padding: 8px;
+  }
+  .film-overlay .btn {
+    padding: 6px;
+    font-size: 11px;
+  }
+}
