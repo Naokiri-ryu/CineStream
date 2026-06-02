@@ -5,12 +5,10 @@ import string
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'database.db')
 
-
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
-
 
 def init_db():
     conn = get_db()
@@ -22,6 +20,7 @@ def init_db():
             genre       TEXT,
             year        INTEGER,
             duration    INTEGER,
+            rating      REAL DEFAULT 0.0,
             poster_url  TEXT,
             hls_path    TEXT NOT NULL,
             format      TEXT DEFAULT 'HD · HLS Stream',
@@ -41,58 +40,41 @@ def init_db():
         );
     ''')
 
-    # Isi data contoh jika tabel kosong
     count = conn.execute('SELECT COUNT(*) FROM films').fetchone()[0]
     if count == 0:
         conn.executescript('''
-            INSERT INTO films (title, description, genre, year, duration, poster_url, hls_path, format, language, has_subtitle) VALUES
+            INSERT INTO films (title, description, genre, year, duration, rating, poster_url, hls_path, format, language, has_subtitle) VALUES
             (
                 'Big Buck Bunny',
                 'Film animasi pendek tentang seekor kelinci raksasa yang harus menghadapi tiga penggangu kecil yang jahat.',
                 'Animasi',
                 2008,
                 10,
+                6.5,
                 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Big_buck_bunny_poster_big.jpg/800px-Big_buck_bunny_poster_big.jpg',
                 'big_buck_bunny/index.m3u8',
                 'HD · HLS Stream',
                 'Inggris',
                 1
-            ),
-            (
-                'Elephants Dream',
-                'Film animasi open source pertama dari Blender Foundation. Sebuah perjalanan surreal dua karakter.',
-                'Animasi',
-                2006,
-                11,
-                'https://upload.wikimedia.org/wikipedia/commons/thumb/7/70/Elephants_Dream_s1_l.jpg/800px-Elephants_Dream_s1_l.jpg',
-                'elephants_dream/index.m3u8',
-                'HD · HLS Stream',
-                'Inggris',
-                0
             );
         ''')
-
     conn.commit()
 
-    # Migrasi otomatis: tambah kolom baru ke database yang sudah ada
-    # SQLite tidak support IF NOT EXISTS pada ALTER TABLE, jadi pakai try/except
+    # Migrasi otomatis: tambah kolom baru ke database yang sudah ada tanpa menghapus data lama
     for col, definition in [
         ('format',       "TEXT DEFAULT 'HD · HLS Stream'"),
         ('language',     "TEXT DEFAULT 'Inggris'"),
         ('has_subtitle', 'INTEGER DEFAULT 1'),
+        ('rating',       'REAL DEFAULT 0.0'), # Tambahan migrasi kolom rating
     ]:
         try:
             conn.execute(f'ALTER TABLE films ADD COLUMN {col} {definition}')
             conn.commit()
         except Exception:
-            pass  # kolom sudah ada, tidak perlu ditambah lagi
+            pass 
 
     conn.close()
-    conn = get_db()
-    rows = conn.execute('SELECT * FROM films ORDER BY title').fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
+    return get_films()
 
 def get_film(film_id):
     conn = get_db()
@@ -106,28 +88,24 @@ def get_films():
     conn.close()
     return [dict(r) for r in rows]
 
-
-def add_film(title, description, genre, year, duration, poster_url, hls_path,
+def add_film(title, description, genre, year, duration, rating, poster_url, hls_path,
              format='HD · HLS Stream', language='Inggris', has_subtitle=1):
     conn = get_db()
     conn.execute(
         '''INSERT INTO films
-           (title, description, genre, year, duration, poster_url, hls_path, format, language, has_subtitle)
-           VALUES (?,?,?,?,?,?,?,?,?,?)''',
-        (title, description, genre, year, duration, poster_url, hls_path, format, language, has_subtitle)
+           (title, description, genre, year, duration, rating, poster_url, hls_path, format, language, has_subtitle)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
+        (title, description, genre, year, duration, rating, poster_url, hls_path, format, language, has_subtitle)
     )
     conn.commit()
     conn.close()
-
 
 def _generate_code(length=6):
     chars = string.ascii_uppercase + string.digits
     return ''.join(random.choices(chars, k=length))
 
-
 def create_room(film_id, host_name):
     conn = get_db()
-    # Pastikan kode unik
     while True:
         code = _generate_code()
         exists = conn.execute('SELECT 1 FROM rooms WHERE room_code = ?', (code,)).fetchone()
@@ -141,7 +119,6 @@ def create_room(film_id, host_name):
     conn.close()
     return code
 
-
 def get_room(room_code):
     conn = get_db()
     row = conn.execute('''
@@ -152,7 +129,6 @@ def get_room(room_code):
     ''', (room_code,)).fetchone()
     conn.close()
     return dict(row) if row else None
-
 
 def deactivate_room(room_code):
     conn = get_db()
@@ -168,10 +144,8 @@ def get_all_films():
 
 def delete_film(film_id):
     conn = get_db()
-    # 1. Ambil path HLS untuk nanti dihapus berkas fisiknya jika diperlukan
     film = conn.execute('SELECT hls_path FROM films WHERE id = ?', (film_id,)).fetchone()
     if film:
-        # 2. Hapus data dari database
         conn.execute('DELETE FROM films WHERE id = ?', (film_id,))
         conn.commit()
         conn.close()
@@ -180,7 +154,6 @@ def delete_film(film_id):
     return False, ""
 
 def delete_room(room_code):
-    """Menghapus data room dari database agar tidak menumpuk."""
     conn = get_db()
     conn.execute('DELETE FROM rooms WHERE room_code = ?', (room_code,))
     conn.commit()

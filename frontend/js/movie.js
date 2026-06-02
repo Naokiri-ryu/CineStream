@@ -108,10 +108,31 @@ function renderDetail(film) {
     film.genre || "Film";
   document.getElementById("detail-genre-badge").textContent =
     film.genre || "Film";
+
+  // ── MENGHITUNG RATING BINTANG SECARA DINAMIS ──
+  const rating = film.rating ? parseFloat(film.rating) : 0;
+  const ratingTextEl = document.getElementById("detail-rating-text");
+  const ratingStarsEl = document.getElementById("detail-rating-stars");
+
+  if (ratingTextEl) {
+    ratingTextEl.textContent =
+      rating > 0 ? `${rating.toFixed(1)} / 10` : "Belum ada rating";
+  }
+  if (ratingStarsEl) {
+    // Skala 10 diubah jadi skala 5 bintang (Math.round)
+    const starCount = Math.round(rating / 2);
+    let starsHTML = "";
+    for (let i = 1; i <= 5; i++) {
+      starsHTML += i <= starCount ? "★" : "☆";
+    }
+    ratingStarsEl.textContent = rating > 0 ? starsHTML : "☆☆☆☆☆";
+  }
+  // ─────────────────────────────────────────────
+
   document.getElementById("detail-synopsis").textContent =
     film.description || "Tidak ada sinopsis tersedia.";
 
-  // Info tambahan — sekarang dari database, bukan hardcoded
+  // Info tambahan
   document.getElementById("detail-format").textContent =
     film.format || "HD · HLS Stream";
   document.getElementById("detail-language").textContent =

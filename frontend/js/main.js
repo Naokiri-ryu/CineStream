@@ -5,7 +5,7 @@ let selectedFilmId = null;
 
 // Melacak pengunjung aktif secara global di background
 if (typeof io !== "undefined" && !window.location.pathname.includes("/watch")) {
-  const globalSocket = io(`http://${window.location.hostname}:5000`);
+  const globalSocket = io({ transports: ["polling"] });
 }
 
 const mobileToggle = document.getElementById("mobile-toggle");
@@ -113,7 +113,7 @@ function updateHeroUI() {
   const heroSec = document.getElementById("hero-section");
   const heroContent = document.getElementById("hero-content");
 
-  // Set Background (Gunakan poster url sementara, idealnya gambar lanskap)
+  // Set Background
   heroSec.style.backgroundImage = `url('${film.poster_url}')`;
 
   // Set Teks
@@ -124,6 +124,7 @@ function updateHeroUI() {
       <span>Tahun: ${film.year || "—"}</span>
       <span>Genre: ${film.genre || "Film"}</span>
       <span>Durasi: ${film.duration ? film.duration + " mnt" : "—"}</span>
+      <span style="color: #d29922;">★ ${film.rating ? film.rating.toFixed(1) : "N/A"}</span>
     </div>
     <div style="display: flex; gap: 10px;">
       <button class="btn btn-accent" onclick="watchFilm(${film.id})">▶ TONTON SEKARANG</button>

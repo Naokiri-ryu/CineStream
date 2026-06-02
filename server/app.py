@@ -3,7 +3,7 @@ import time
 from flask import Flask, jsonify, request, send_from_directory
 from flask_socketio import SocketIO, join_room, leave_room, emit
 
-from database import init_db, get_films, get_film, create_room, get_room,  deactivate_room, delete_room
+from database import init_db, get_films, get_film, create_room, get_room, deactivate_room, delete_room
 
 socketio = SocketIO(cors_allowed_origins='*', async_mode='threading')
 
@@ -107,6 +107,8 @@ def create_app():
         if room not in room_users:
             room_users[room] = []
             
+        room_users[room] = [u for u in room_users[room] if u['username'] != username]
+            
         room_users[room].append({
             'sid': request.sid,
             'username': username,
@@ -114,9 +116,18 @@ def create_app():
         })
         
         emit('user_list', room_users[room], to=room)
+        
+        # PERBAIKAN: Mengirim format waktu yang benar kepada user yang baru masuk
+        if room in room_states:
+            state = room_states[room]
+            emit('video_seek', {'current_time': state['current_time']}, to=request.sid)
+            if state['is_playing']:
+                emit('video_play', {'current_time': state['current_time']}, to=request.sid)
+        
+        emit('user_list', room_users[room], to=room)
         if room in room_states:
             emit('video_seek', {'current_time': room_states[room]}, to=request.sid)
-
+            
     @socketio.on('disconnect')
     def handle_disconnect():
         sid = request.sid
@@ -126,14 +137,12 @@ def create_app():
             for user in users:
                 if user['sid'] == sid:
                     if user.get('is_host'):
-                        # Host Keluar = Bubarkan Room
                         emit('room_closed', {'message': 'Host telah keluar. Watch Party dihentikan.'}, to=code)
                         delete_room(code)
                         room_states.pop(code, None)
                         room_users.pop(code, None)
                         return
                     else:
-                        # Penonton Keluar = Hapus dari List
                         room_users[code] = [u for u in users if u['sid'] != sid]
                         emit('user_list', room_users[code], to=code)
                         return
