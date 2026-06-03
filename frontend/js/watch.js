@@ -5,6 +5,27 @@
 // ── INJEKSI CSS ROTASI AJAIB ──
 const fsStyle = document.createElement("style");
 fsStyle.innerHTML = `
+  /* KUSTOMISASI SUBTITLE (Menghilangkan latar hitam & menambah outline) */
+  video::cue {
+      background: transparent !important;
+      background-color: transparent !important;
+      color: #ffffff !important;
+      font-family: "Segoe UI", Arial, sans-serif !important;
+      font-weight: 600 !important;
+      font-size: 1.1em !important;
+      /* Membuat garis luar (outline) hitam tebal agar teks tetap terbaca di adegan terang */
+      text-shadow: 
+          -2px -2px 0 #000,  
+          2px -2px 0 #000,
+          -2px  2px 0 #000,
+          2px  2px 0 #000,
+          0px  3px 3px rgba(0,0,0,0.8) !important;
+  }
+
+  .video-wrapper:fullscreen, 
+  .video-wrapper:-webkit-full-screen {
+      background-color: #000 !important;
+
   .video-wrapper:fullscreen, 
   .video-wrapper:-webkit-full-screen {
       background-color: #000 !important;
@@ -245,15 +266,22 @@ function loadVideoPlayer(film) {
     streamUrl = `/media/hls/${film.id || film.film_id}/index.m3u8`;
 
   // === PERBAIKAN: JANGAN PAKSA SUBTITLE JIKA BISA BIKIN HANG ===
+  // === PERBAIKAN: MEMUAT SUBTITLE DENGAN IZIN KEAMANAN BROWSER ===
   if (film.has_subtitle) {
     let subtitleUrl = streamUrl.replace("index.m3u8", "subtitle.vtt");
+
+    // KUNCI 1: Memberikan izin agar Browser tidak memblokir file VTT dari Nginx
+    video.crossOrigin = "anonymous";
+
     const track = document.createElement("track");
     track.kind = "subtitles";
-    track.label = "Subtitle";
+    track.label = "Indonesia";
     track.srclang = "id";
     track.src = subtitleUrl;
-    // KUNCI: Jangan gunakan `track.default = true;` di sini!
-    // Biarkan user mengaktifkannya secara manual dari logo "CC" di player video.
+
+    // KUNCI 2: Karena file VTT manual sudah pasti ada, kita paksa nyala otomatis lagi!
+    track.default = true;
+
     video.appendChild(track);
   }
 

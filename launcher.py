@@ -248,6 +248,82 @@ class SectionHeader(QWidget):
         lay.addWidget(line)
 
 
+# ── FFmpeg Worker (Versi 2 Tahap - Cerdas & Anti-Crash) ──────────────────────
+
+class FFmpegWorker(QThread):
+    progress = pyqtSignal(int)
+    finished = pyqtSignal(bool, str, str)
+
+    def __init__(self, input_file: str, title: str):
+        super().__init__()
+        self.input_file = input_file
+        self.title      = title
+        self._cancelled = False
+        self.process    = None
+        self.output_dir = ''
+
+    def stop(self):
+        self._cancelled = True
+        if self.process:
+            self.process.kill()
+
+    def run(self):
+        try:
+            safe_title = re.sub(r'[^a-zA-Z0-9]', '_', self.title.lower())
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            self.output_dir = os.path.join(base_dir, 'media', 'hls', safe_title)
+            os.makedirs(self.output_dir, exist_ok=True)
+            
+            output_m3u8 = os.path.join(self.output_dir, 'index.m3u8')
+            output_vtt = os.path.join(self.output_dir, 'subtitle.vtt')
+            
+            # TAHAP 1: KONVERSI VIDEO & AUDIO SAJA (Menjamin kelancaran video)
+            cmd_video = [
+                'ffmpeg', '-y', '-i', os.path.normpath(self.input_file),
+                '-map', '0:v:0', '-map', '0:a:0',
+                '-c:v', 'libx264', '-profile:v', 'high', '-pix_fmt', 'yuv420p',
+                '-level', '4.1', '-s', '1280x720',
+                '-c:a', 'aac', '-ac', '2', '-b:a', '128k',
+                '-start_number', '0', '-hls_time', '10', '-hls_list_size', '0',
+                '-f', 'hls', os.path.normpath(output_m3u8)
+            ]
+            flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            
+            self.process = subprocess.Popen(
+                cmd_video, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                universal_newlines=True, creationflags=flags)
+                
+            while True:
+                if self._cancelled: break
+                line = self.process.stdout.readline()
+                if not line: break
+                if 'frame=' in line:
+                    self.progress.emit(50)
+                    
+            self.process.wait()
+            
+            if self._cancelled:
+                shutil.rmtree(self.output_dir, ignore_errors=True)
+                self.finished.emit(False, 'Konversi dibatalkan. File dihapus.', '')
+                return
+
+            if self.process.returncode == 0:
+                # TAHAP 2: EKSTRAKSI SUBTITLE SILENT (Abaikan error jika formatnya gambar/PGS)
+                cmd_sub = [
+                    'ffmpeg', '-y', '-i', os.path.normpath(self.input_file),
+                    '-map', '0:s:0?', '-c:s', 'webvtt', os.path.normpath(output_vtt)
+                ]
+                subprocess.run(cmd_sub, creationflags=flags, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                
+                self.progress.emit(100)
+                self.finished.emit(True, f'Sukses mengonversi {self.title}!', self.output_dir)
+            else:
+                self.finished.emit(False, f'FFmpeg error code: {self.process.returncode}', '')
+                
+        except Exception as e:
+            self.finished.emit(False, str(e), '')
+
+
 # ── Dialogs ───────────────────────────────────────────────────────────────────
 
 class ConvertVideoDialog(QDialog):
@@ -309,12 +385,36 @@ class ConvertVideoDialog(QDialog):
             if not self.txt_title.text(): self.txt_title.setText(os.path.splitext(os.path.basename(path))[0])
 
     def _start(self):
-        # (Logika FFmpeg sama seperti sebelumnya, dipersingkat untuk fokus pada UI)
-        QMessageBox.warning(self, 'Info', 'Mesin FFmpeg berjalan di latar belakang.')
-        self.accept()
+        if not self.txt_path.text(): QMessageBox.warning(self, 'Input kosong', 'Pilih file video dahulu.'); return
+        if not self.txt_title.text(): QMessageBox.warning(self, 'Input kosong', 'Masukkan judul film dahulu.'); return
+        self.btn_start.setEnabled(False); self.btn_cancel_conv.setEnabled(True)
+        self.lbl_status.setText('Status: Memproses dengan FFmpeg...')
+        self.lbl_status.setStyleSheet(f'color: {YELLOW}; font-size: 12px;')
+        self.worker = FFmpegWorker(self.txt_path.text(), self.txt_title.text())
+        self.worker.progress.connect(self.bar.setValue)
+        self.worker.finished.connect(self._done)
+        self.worker.start()
+        _push_log(f"Konversi dimulai: {self.txt_title.text()}", 'info')
 
+    def _cancel(self):
+        if hasattr(self, 'worker') and self.worker.isRunning():
+            self.lbl_status.setText('Status: Membatalkan...')
+            self.worker.stop(); self.worker.wait(); self.accept()
 
-# ================== KUNCI PERBAIKAN DIALOG ==================
+    def _done(self, ok: bool, msg: str, path: str):
+        self.btn_start.setEnabled(True); self.btn_cancel_conv.setEnabled(False)
+        if ok:
+            self.lbl_status.setText('Status: ✅ Selesai')
+            self.lbl_status.setStyleSheet(f'color: {GREEN}; font-size: 12px;')
+            _push_log(f"Konversi selesai: {self.txt_title.text()}", 'success')
+            QMessageBox.information(self, 'Sukses', f'{msg}\nDisimpan di:\n{path}')
+            self.accept()
+        else:
+            self.lbl_status.setText('Status: ✕ Gagal/Dibatalkan')
+            self.lbl_status.setStyleSheet(f'color: {ACCENT}; font-size: 12px;')
+            _push_log(f"Konversi gagal: {msg}", 'error')
+            QMessageBox.warning(self, 'Berhenti', msg)
+
 
 class AddFilmDialog(QDialog):
     def __init__(self, parent=None):
@@ -332,13 +432,10 @@ class AddFilmDialog(QDialog):
 
         self._inputs = {}
         
-        # Helper fungsi gaya label
         def mk_lbl(text):
-            l = QLabel(text)
-            l.setStyleSheet(f'color: {MUTED}; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; margin-top: 4px;')
+            l = QLabel(text); l.setStyleSheet(f'color: {MUTED}; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; margin-top: 4px;')
             return l
 
-        # 1. Judul & Tombol Fetch
         lay.addWidget(mk_lbl('JUDUL FILM *'))
         row_title = QHBoxLayout()
         inp_title = QLineEdit(); inp_title.setPlaceholderText('Masukkan judul film')
@@ -348,7 +445,6 @@ class AddFilmDialog(QDialog):
         row_title.addWidget(inp_title); row_title.addWidget(btn_mal); row_title.addWidget(btn_imdb)
         lay.addLayout(row_title)
 
-        # 2. Deskripsi & Genre
         lay.addWidget(mk_lbl('DESKRIPSI'))
         inp_desc = QLineEdit(); inp_desc.setPlaceholderText('Sinopsis singkat...')
         self._inputs['desc'] = inp_desc; lay.addWidget(inp_desc)
@@ -357,9 +453,7 @@ class AddFilmDialog(QDialog):
         inp_genre = QLineEdit(); inp_genre.setPlaceholderText('Drama, Action...')
         self._inputs['genre'] = inp_genre; lay.addWidget(inp_genre)
 
-        # 3. Barisan Metadata Ekstra (Tahun, Durasi, Rating)
         row_meta = QHBoxLayout()
-        
         v_year = QVBoxLayout(); v_year.setSpacing(2)
         v_year.addWidget(mk_lbl('TAHUN'))
         inp_year = QLineEdit(); inp_year.setPlaceholderText('Contoh: 2026')
@@ -378,7 +472,6 @@ class AddFilmDialog(QDialog):
         row_meta.addLayout(v_year); row_meta.addLayout(v_dur); row_meta.addLayout(v_rat)
         lay.addLayout(row_meta)
 
-        # 4. Sisa Form
         lay.addWidget(mk_lbl('PATH HLS *'))
         row_hls = QHBoxLayout()
         inp_hls = QLineEdit(); inp_hls.setPlaceholderText('nama_folder/index.m3u8')
@@ -415,27 +508,31 @@ class AddFilmDialog(QDialog):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         media_hls_base = os.path.join(base_dir, 'media', 'hls')
         os.makedirs(media_hls_base, exist_ok=True)
+        
         folder_path = QFileDialog.getExistingDirectory(self, 'Pilih Folder Output HLS', media_hls_base)
+        
         if folder_path:
-            folder_path = folder_path.replace('\\', '/')
-            if 'media/hls/' in folder_path.lower():
-                relative_part = folder_path.lower().split('media/hls/')[1]
-                orig_folder_name = folder_path[len(folder_path)-len(relative_part):]
-                self._inputs['hls_path'].setText(f"{orig_folder_name}/index.m3u8")
-            else:
-                self._inputs['hls_path'].setText(f"{os.path.basename(folder_path)}/index.m3u8")
+            # Mengambil HANYA nama folder paling ujung
+            folder_name = os.path.basename(os.path.normpath(folder_path))
+            self._inputs['hls_path'].setText(f"{folder_name}/index.m3u8")
 
     def _apply_fetched_data(self, data):
         if data:
             if data.get('description'): self._inputs['desc'].setText(data['description'])
             if data.get('genre'): self._inputs['genre'].setText(data['genre'])
             if data.get('poster_url'): self._inputs['poster'].setText(data['poster_url'])
-            
             if data.get('year'): self._inputs['year'].setText(str(data['year']))
-            if data.get('duration'): self._inputs['duration'].setText(str(data['duration']))
+            
+            dur = data.get('duration', 0)
+            if isinstance(dur, str):
+                match = re.search(r'\d+', dur)
+                self._inputs['duration'].setText(match.group() if match else '0')
+            else:
+                self._inputs['duration'].setText(str(dur))
+                
             if data.get('rating'): self._inputs['rating'].setText(str(data['rating']))
             
-            show_toast_msg(self, f"Data ditarik otomatis!\n\nScore: {data.get('rating')}\nDurasi: {data.get('duration')} mnt\nTahun: {data.get('year')}")
+            show_toast_msg(self, f"Data ditarik otomatis!\n\nScore: {self._inputs['rating'].text()}\nDurasi: {self._inputs['duration'].text()} mnt\nTahun: {self._inputs['year'].text()}")
 
     def _fetch_mal(self):
         title = self._inputs['title'].text().strip()
@@ -519,7 +616,6 @@ class EditFilmDialog(QDialog):
         inp_genre = QLineEdit(); inp_genre.setText(film.get('genre', ''))
         self._inputs['genre'] = inp_genre; lay.addWidget(inp_genre)
 
-        # Baris Meta
         row_meta = QHBoxLayout()
         v_year = QVBoxLayout(); v_year.addWidget(mk_lbl('TAHUN'))
         inp_year = QLineEdit(); inp_year.setText(str(film.get('year', '')))
@@ -565,9 +661,16 @@ class EditFilmDialog(QDialog):
             if data.get('genre'): self._inputs['genre'].setText(data['genre'])
             if data.get('poster_url'): self._inputs['poster'].setText(data['poster_url'])
             if data.get('year'): self._inputs['year'].setText(str(data['year']))
-            if data.get('duration'): self._inputs['duration'].setText(str(data['duration']))
+            
+            dur = data.get('duration', 0)
+            if isinstance(dur, str):
+                match = re.search(r'\d+', dur)
+                self._inputs['duration'].setText(match.group() if match else '0')
+            else:
+                self._inputs['duration'].setText(str(dur))
+                
             if data.get('rating'): self._inputs['rating'].setText(str(data['rating']))
-            show_toast_msg(self, f"Data diperbarui!\n\nScore: {data.get('rating')}\nDurasi: {data.get('duration')} mnt\nTahun: {data.get('year')}")
+            show_toast_msg(self, f"Data diperbarui!\n\nScore: {self._inputs['rating'].text()}\nDurasi: {self._inputs['duration'].text()} mnt\nTahun: {self._inputs['year'].text()}")
 
     def _fetch_mal(self):
         title = self._inputs['title'].text().strip()
@@ -738,7 +841,6 @@ class CineStreamDashboard(QMainWindow):
         self._lbl_count = QLabel('— film terdaftar'); self._lbl_count.setStyleSheet(f'color: {MUTED}; font-size: 12px;')
         root.addWidget(self._lbl_count)
 
-        # ====== KUNCI UPDATE TABEL: MENGGANTI KOLOM LEBIH LENGKAP ======
         self._table = QTableWidget(0, 9)
         self._table.setHorizontalHeaderLabels(['No.', 'ID', 'Judul Film', 'Genre', 'Tahun', 'Durasi', 'Rating', 'Sub', 'Aksi'])
         self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
@@ -746,7 +848,6 @@ class CineStreamDashboard(QMainWindow):
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         
-        # Atur lebar kolom agar muat dan rapi
         self._table.setColumnWidth(0, 44); self._table.setColumnWidth(1, 44); self._table.setColumnWidth(4, 55)
         self._table.setColumnWidth(5, 60); self._table.setColumnWidth(6, 60); self._table.setColumnWidth(7, 44)
         self._table.setColumnWidth(8, 140) 
@@ -844,11 +945,9 @@ class CineStreamDashboard(QMainWindow):
             self._table.setItem(ri, 2, cell(film['title']))
             self._table.setItem(ri, 3, cell(film.get('genre') or '—', color=BLUE))
             
-            # Kolom Tahun
             yr = QTableWidgetItem(str(film.get('year') or '—')); yr.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._table.setItem(ri, 4, yr)
             
-            # ====== MENGISI DATA DURASI & RATING BARU KE TABEL ======
             dur_str = f"{film.get('duration', 0)}m" if film.get('duration') else '—'
             dur_it = QTableWidgetItem(dur_str); dur_it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._table.setItem(ri, 5, dur_it)
@@ -862,15 +961,14 @@ class CineStreamDashboard(QMainWindow):
             sub_it = QTableWidgetItem('✓' if has_sub else '✗'); sub_it.setTextAlignment(Qt.AlignmentFlag.AlignCenter); sub_it.setForeground(QColor(GREEN if has_sub else MUTED))
             self._table.setItem(ri, 7, sub_it)
 
-            # ====== KUNCI UPDATE: TOMBOL AKSI BERBENTUK TEKS AGAR TERBACA ======
             aw = QWidget(); al = QHBoxLayout(aw); al.setContentsMargins(4, 4, 4, 4); al.setSpacing(6)
             
-            btn_edit = QPushButton('Edit') # Diganti teks "Edit"
+            btn_edit = QPushButton('Edit')
             btn_edit.setFixedSize(55, 28)
             btn_edit.setStyleSheet(f'QPushButton {{ background: {PANEL2}; border: 1px solid {BORDER2}; border-radius: 5px; color: {BLUE}; font-size: 12px; font-weight: bold; }} QPushButton:hover {{ border-color: {BLUE}; background: rgba(88,166,255,0.1); }}')
             btn_edit.clicked.connect(lambda _, f=film: self._action_edit(f))
             
-            btn_del = QPushButton('Hapus') # Diganti teks "Hapus"
+            btn_del = QPushButton('Hapus')
             btn_del.setFixedSize(60, 28)
             btn_del.setStyleSheet(f'QPushButton {{ background: {PANEL2}; border: 1px solid {BORDER2}; border-radius: 5px; color: {ACCENT}; font-size: 12px; font-weight: bold; }} QPushButton:hover {{ border-color: {ACCENT}; background: rgba(229,9,20,0.1); }}')
             btn_del.clicked.connect(lambda _, fid=film['id'], ft=film['title']: self._action_delete(fid, ft))
