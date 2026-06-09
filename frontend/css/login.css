@@ -1,0 +1,401 @@
+/* ── 1. GLOBAL RESET & VARIABLES ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #0a0b10;
+  --surface: #161823;
+  --surface2: #222534;
+  --accent: #ff0043;
+  --accent2: #ff3366;
+  --text: #e8e8f0;
+  --muted: #888899;
+  --border: #2a2d3e;
+  --radius: 8px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  height: 100vh;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── 2. VISUAL SIDE (LEFT BANNER) ── */
+.visual-side {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 3rem;
+  overflow: hidden;
+}
+
+.visual-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #0a0b10 0%, #1a0510 40%, #2d0820 70%, #0a0b10 100%);
+  z-index: 0;
+}
+
+/* ── 3. DYNAMIC MOVIE POSTERS BACKGROUND ── */
+.poster-grid {
+  position: absolute;
+  inset: -50%;
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  opacity: 0.25;
+  transform: rotate(-10deg);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.poster-column {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  width: 180px;
+  animation: scrollUp 60s linear infinite;
+}
+
+.poster-column:nth-child(even) {
+  animation: scrollDown 60s linear infinite;
+}
+
+.poster-img {
+  width: 100%;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.8);
+}
+
+@keyframes scrollUp {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
+@keyframes scrollDown {
+  0% { transform: translateY(-50%); }
+  100% { transform: translateY(0); }
+}
+
+/* ── 4. VISUAL EFFECTS & OVERLAYS ── */
+.visual-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 30% 60%, rgba(255, 0, 67, 0.12) 0%, transparent 60%),
+              linear-gradient(to right, rgba(10, 11, 16, 0.2) 0%, transparent 100%),
+              linear-gradient(to top, rgba(10, 11, 16, 0.95) 0%, transparent 50%);
+  z-index: 2;
+}
+
+.scan-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, rgba(255, 0, 67, 0.4), transparent);
+  z-index: 3;
+}
+
+.scan-line:nth-child(1) { left: 33%; }
+.scan-line:nth-child(2) { left: 66%; }
+
+/* ── 5. VISUAL CONTENT (TEXT & LOGO) ── */
+.visual-content {
+  position: relative;
+  z-index: 4;
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 2rem;
+  text-decoration: none;
+}
+
+.brand-icon {
+  width: 42px;
+  height: 42px;
+  background: var(--accent);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #fff;
+}
+
+.brand-name {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2rem;
+  letter-spacing: 3px;
+  color: var(--text);
+}
+
+.visual-headline {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 4rem;
+  line-height: 1;
+  letter-spacing: 2px;
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+
+.visual-headline span {
+  color: var(--accent);
+}
+
+.visual-sub {
+  font-size: 15px;
+  color: var(--muted);
+  max-width: 340px;
+  line-height: 1.6;
+}
+
+/* ── 6. FORM SIDE (RIGHT PANEL) ── */
+.form-side {
+  width: 480px;
+  height: 100%;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 3rem;
+  position: relative;
+  overflow-y: auto;
+}
+
+.form-side::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(to right, var(--accent), var(--accent2), transparent);
+}
+
+.form-header {
+  margin-bottom: 2rem;
+}
+
+.form-header h1 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2.4rem;
+  letter-spacing: 2px;
+  margin-bottom: 6px;
+}
+
+.form-header p {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* ── 7. TABS & PANELS ── */
+.auth-tabs {
+  display: flex;
+  background: var(--surface2);
+  border-radius: var(--radius);
+  padding: 4px;
+  margin-bottom: 1.5rem;
+  gap: 4px;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.auth-tab.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.auth-panel {
+  display: none;
+}
+
+.auth-panel.active {
+  display: block;
+}
+
+/* ── 8. BUTTONS & INPUT FIELDS ── */
+.btn-google {
+  width: 100%;
+  padding: 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: 0.2s;
+  margin-bottom: 1.5rem;
+}
+
+.google-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 1.5rem;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.field {
+  margin-bottom: 1rem;
+}
+
+.field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 7px;
+}
+
+.field-wrap {
+  position: relative;
+}
+
+.field-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.field input {
+  width: 100%;
+  padding: 11px 40px 11px 38px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  outline: none;
+}
+
+.field input:focus {
+  border-color: var(--accent);
+}
+
+.toggle-pass {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.check-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 1.5rem;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.btn-submit {
+  width: 100%;
+  padding: 13px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: #fff;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ── 9. MESSAGES & FOOTER ── */
+.msg {
+  display: none;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  margin-bottom: 1rem;
+}
+
+.msg.error {
+  background: rgba(255, 0, 67, 0.1);
+  border: 1px solid rgba(255, 0, 67, 0.3);
+  color: #ff6688;
+}
+
+.msg.success {
+  background: rgba(0, 200, 100, 0.1);
+  border: 1px solid rgba(0, 200, 100, 0.3);
+  color: #4dbb88;
+}
+
+.form-footer {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.form-footer a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+/* ── 10. RESPONSIVE DESIGN (MEDIA QUERIES) ── */
+@media (max-width: 800px) {
+  .visual-side {
+    display: none;
+  }
+  .form-side {
+    width: 100%;
+    padding: 2rem 1.5rem;
+  }
+}

@@ -38,6 +38,15 @@ def init_db():
             created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (film_id) REFERENCES films(id)
         );
+        
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT,
+            auth_provider TEXT DEFAULT 'local',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
     ''')
 
     count = conn.execute('SELECT COUNT(*) FROM films').fetchone()[0]
@@ -156,5 +165,31 @@ def delete_film(film_id):
 def delete_room(room_code):
     conn = get_db()
     conn.execute('DELETE FROM rooms WHERE room_code = ?', (room_code,))
+    conn.commit()
+    conn.close()
+
+def add_user(username, email, password_hash, auth_provider='local'):
+    conn = get_db()
+    try:
+        conn.execute(
+            'INSERT INTO users (username, email, password_hash, auth_provider) VALUES (?, ?, ?, ?)',
+            (username, email, password_hash, auth_provider)
+        )
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
+
+def get_user_by_email(email):
+    conn = get_db()
+    row = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def update_password(email, new_password_hash):
+    conn = get_db()
+    conn.execute('UPDATE users SET password_hash = ? WHERE email = ?', (new_password_hash, email))
     conn.commit()
     conn.close()
