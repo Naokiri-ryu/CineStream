@@ -3,7 +3,8 @@ import time
 from flask import Flask, jsonify, request, send_from_directory
 from flask_socketio import SocketIO, join_room, leave_room, emit
 
-from database import init_db, get_films, get_film, create_room, get_room, deactivate_room, delete_room
+from werkzeug.security import generate_password_hash, check_password_hash
+from database import init_db, get_films, get_film, create_room, get_room, deactivate_room, delete_room, add_user, get_user_by_email, update_password
 
 socketio = SocketIO(cors_allowed_origins='*', async_mode='threading')
 
@@ -86,6 +87,58 @@ def create_app():
     def api_get_room(room_code):
         room = get_room(room_code)
         return jsonify(room) if room else (jsonify({'error': 'Room tidak ditemukan'}), 404)
+    
+    # ── AUTHENTICATION API ──
+    @app.route('/api/auth/register', methods=['POST'])
+    def api_register():
+        data = request.get_json(force=True)
+        if not data.get('username') or not data.get('email') or not data.get('password'):
+            return jsonify({'message': 'Semua field wajib diisi.'}), 400
+        success = add_user(data['username'], data['email'], generate_password_hash(data['password']), 'local')
+        if success:
+            return jsonify({'token': 'dummy_token', 'user': {'email': data['email'], 'username': data['username']}}), 201
+        return jsonify({'message': 'Email sudah terdaftar!'}), 400
+
+    @app.route('/api/auth/login', methods=['POST'])
+    def api_login():
+        data = request.get_json(force=True)
+        user = get_user_by_email(data.get('email'))
+        if user and user['auth_provider'] == 'local' and check_password_hash(user['password_hash'], data.get('password')):
+            return jsonify({'token': 'dummy_token', 'user': {'email': user['email'], 'username': user['username']}}), 200
+        return jsonify({'message': 'Email atau password salah!'}), 401
+
+    @app.route('/api/auth/google-sync', methods=['POST'])
+    def api_google_sync():
+        data = request.get_json(force=True)
+        user = get_user_by_email(data.get('email'))
+        if not user:
+            add_user(data.get('username'), data.get('email'), None, 'google')
+        return jsonify({'token': 'dummy_token', 'user': {'email': data.get('email'), 'username': data.get('username')}}), 200
+
+    @app.route('/api/auth/reset-password', methods=['POST'])
+    def api_reset_password():
+        data = request.get_json(force=True)
+        email = data.get('email')
+        
+        user = get_user_by_email(email)
+        if not user:
+            return jsonify({'message': 'Email tidak ditemukan.'}), 404
+            
+        # Cegah pengguna Google mereset password
+        if user['auth_provider'] != 'local':
+            return jsonify({'message': 'Akun ini terdaftar pakai Google. Silakan klik Lanjutkan dengan Google.'}), 400
+
+        import random, string
+        # Buat 8 karakter password sementara
+        temp_pass = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        hashed_pass = generate_password_hash(temp_pass)
+
+        # Simpan ke database
+        update_password(email, hashed_pass)
+
+        return jsonify({
+            'message': f'Berhasil! Password sementara kamu: {temp_pass}'
+        }), 200
 
     @app.route('/media/hls/<path:filename>')
     def serve_hls(filename):
