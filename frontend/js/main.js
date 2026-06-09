@@ -286,5 +286,101 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove("show"), 3000);
 }
 
+// ── LOGIKA SESI LOGIN & LOGOUT ──
+function checkLoginState() {
+  const authContainer = document.getElementById('auth-container');
+  if (!authContainer) return; 
+
+  const userStr = localStorage.getItem('user');
+
+  if (userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      authContainer.innerHTML = `
+        <span style="color: var(--text); font-weight: 500; margin-right: 15px; font-size: 14px;">
+          Halo, <span style="color: var(--accent); font-weight: bold;">${user.username}</span>
+        </span>
+        <button onclick="doLogout()" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;">
+          Keluar
+        </button>
+      `;
+    } catch (e) {
+      localStorage.removeItem('user');
+      authContainer.innerHTML = `<a href="login.html" class="btn btn-accent" style="text-decoration:none; padding: 6px 16px; border-radius: 6px; color: white;">Masuk / Daftar</a>`;
+    }
+  } else {
+    authContainer.innerHTML = `<a href="login.html" class="btn btn-accent" style="text-decoration:none; padding: 6px 16px; border-radius: 6px; color: white;">Masuk / Daftar</a>`;
+  }
+}
+
+window.doLogout = function() {
+  if(confirm("Yakin ingin keluar?")) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.reload();
+  }
+};
+
+// Panggil fungsi ini agar tombol langsung muncul
+checkLoginState();
+
 // Menjalankan inisiasi awal
 loadFilms();
+
+// ── LOGIKA SESI LOGIN & LOGOUT OTOMATIS ──
+function bangunTombolLogin() {
+  // 1. Cari area menu navigasi
+  const navLinks = document.getElementById("nav-links");
+  if (!navLinks) return;
+
+  // 2. Buat wadahnya secara otomatis pakai JS (jadi kamu nggak perlu edit HTML)
+  let authContainer = document.getElementById("auth-container");
+  if (!authContainer) {
+    authContainer = document.createElement("div");
+    authContainer.id = "auth-container";
+    authContainer.style.display = "flex";
+    authContainer.style.alignItems = "center";
+    
+    // Sisipkan wadah ini persis di sebelah kiri tombol Bulan Sabit (Tema)
+    const themeBtn = document.getElementById("theme-toggle");
+    if (themeBtn) {
+      navLinks.insertBefore(authContainer, themeBtn);
+    } else {
+      navLinks.appendChild(authContainer);
+    }
+  }
+
+  // 3. Cek memori apakah user sudah login
+  const userStr = localStorage.getItem("user");
+
+  if (userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      authContainer.innerHTML = `
+        <span style="color: var(--text); font-weight: 500; margin-right: 15px; font-size: 14px;">
+          Halo, <span style="color: var(--accent); font-weight: bold;">${user.username}</span>
+        </span>
+        <button onclick="doLogout()" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;">
+          Keluar
+        </button>
+      `;
+    } catch (e) {
+      localStorage.removeItem("user");
+      authContainer.innerHTML = `<a href="login.html" class="btn btn-accent" style="text-decoration:none; padding: 6px 16px; border-radius: 6px; color: white;">Masuk / Daftar</a>`;
+    }
+  } else {
+    // Jika belum login
+    authContainer.innerHTML = `<a href="login.html" class="btn btn-accent" style="text-decoration:none; padding: 6px 16px; border-radius: 6px; color: white;">Masuk / Daftar</a>`;
+  }
+}
+
+window.doLogout = function() {
+  if(confirm("Yakin ingin keluar?")) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.location.reload();
+  }
+};
+
+// Jalankan fungsinya (diberi sedikit jeda agar aman dari loading halaman)
+setTimeout(bangunTombolLogin, 200);
