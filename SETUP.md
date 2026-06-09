@@ -1,27 +1,28 @@
-# CineStream — Panduan Setup & Instalasi
+# 🎬 Movia — Panduan Setup & Instalasi
 
-Selamat datang di CineStream! 🎬
-Dokumen ini akan membantu Anda menyiapkan server, mengonversi video ke HLS, dan menjalankan watch party di jaringan lokal dengan cepat.
+Selamat datang di Movia! Platform _Self-Hosted Video Streaming_ dan _Watch Party_ lokal.
+Dokumen ini akan membantu Anda menyiapkan server, mengonversi video secara otomatis, dan menjalankan _Watch Party_ di jaringan lokal (WiFi/LAN) Anda.
 
 ---
 
-## 🚀 1. Siapkan Lingkungan
+## 🚀 1. Persiapan Lingkungan Sistem
 
-1. Pastikan Python sudah terpasang. Rekomendasi: **Python 3.11** atau **3.12**.
-2. Buka terminal di folder proyek `CineStream`.
-3. Jalankan perintah berikut untuk instalasi dependensi:
+Sebelum memulai, pastikan 3 program utama ini sudah terpasang di PC/Laptop Server Anda:
 
-```bash
+1. **Python (Rekomendasi 3.10 - 3.12):** [Download di sini](https://www.python.org/downloads/). (Wajib centang _Add Python to PATH_ saat instalasi).
+2. **FFmpeg:** Mesin inti untuk konversi video HLS. [Download di sini](https://ffmpeg.org/download.html) dan pastikan folder `bin` FFmpeg telah dimasukkan ke dalam _Environment Variables PATH_ Windows Anda.
+3. **Nginx:** Web server untuk mengalirkan pecahan video dengan cepat. [Download Nginx Windows](http://nginx.org/en/download.html).
+
+### Instalasi Dependensi Python
+
+Buka terminal/Command Prompt di dalam folder proyek ini, lalu jalankan:
+
+````bash
 pip install -r requirements.txt
-```
 
-> Jika menggunakan virtualenv, aktifkan terlebih dahulu sebelum instalasi.
+### ⚙️ 2. Konfigurasi Nginx
 
----
-
-## ⚙️ 2. Konfigurasi Nginx
-
-CineStream menggunakan Nginx untuk:
+Movia menggunakan Nginx untuk:
 
 - menyajikan konten frontend
 - melayani file HLS
@@ -38,7 +39,7 @@ CineStream menggunakan Nginx untuk:
 
 ```bash
 start nginx
-```
+````
 
 Jika Nginx sudah berjalan:
 
@@ -76,9 +77,9 @@ ffmpeg -i "path\ke\video_asli.mkv" -map 0:v -map 0:a -c:v copy -c:a aac -start_n
 
 ---
 
-## 🎬 4. Jalankan CineStream
+## 🎬 4. Jalankan Movia
 
-Di terminal proyek `CineStream`, jalankan:
+Di terminal proyek `Movia`, jalankan:
 
 ```bash
 python launcher.py
@@ -88,11 +89,11 @@ Aplikasi akan:
 
 - mengecek database SQLite
 - menjalankan server Flask
-- menampilkan ikon CineStream di system tray
+- menampilkan ikon Movia di system tray
 
 ### Menambahkan film baru:
 
-1. Klik ikon tray CineStream.
+1. Klik ikon tray Movia.
 2. Pilih **Tambah Film Baru**.
 3. Isi metadata film:
    - Judul
@@ -110,7 +111,7 @@ Aplikasi akan:
 
 Pastikan semua perangkat terhubung ke jaringan WiFi atau LAN yang sama.
 
-1. Klik ikon tray CineStream.
+1. Klik ikon tray Movia.
 2. Salin URL jaringan lokal (contoh: `http://192.168.1.50:8080`).
 3. Bagikan URL tersebut kepada teman-teman.
 

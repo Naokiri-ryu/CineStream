@@ -1,8 +1,18 @@
 /**
- * CineStream - Watch Engine Logics
+ * Movia - Watch Engine Logics
  */
 
 // ── INJEKSI CSS ROTASI AJAIB ──
+/**
+ * Movia - Watch Engine Logics
+ */
+
+// ── INJEKSI CSS ROTASI AJAIB & SUBTITLE ──
+/**
+ * CineStream - Watch Engine Logics
+ */
+
+// ── INJEKSI CSS ROTASI AJAIB & KUSTOMISASI SUBTITLE ──
 const fsStyle = document.createElement("style");
 fsStyle.innerHTML = `
   /* KUSTOMISASI SUBTITLE (Menghilangkan latar hitam & menambah outline) */
@@ -16,15 +26,11 @@ fsStyle.innerHTML = `
       /* Membuat garis luar (outline) hitam tebal agar teks tetap terbaca di adegan terang */
       text-shadow: 
           -2px -2px 0 #000,  
-          2px -2px 0 #000,
+           2px -2px 0 #000,
           -2px  2px 0 #000,
-          2px  2px 0 #000,
-          0px  3px 3px rgba(0,0,0,0.8) !important;
+           2px  2px 0 #000,
+           0px  3px 3px rgba(0,0,0,0.8) !important;
   }
-
-  .video-wrapper:fullscreen, 
-  .video-wrapper:-webkit-full-screen {
-      background-color: #000 !important;
 
   .video-wrapper:fullscreen, 
   .video-wrapper:-webkit-full-screen {
@@ -144,6 +150,7 @@ if (!IS_HOST && ROOM_CODE) {
     glass.style.zIndex = "10";
     wrapper.appendChild(glass);
 
+    // Tombol Fullscreen (Perbesar Layar)
     const fsBtn = document.createElement("button");
     fsBtn.innerHTML = "⛶";
     fsBtn.title = "Perbesar Layar";
@@ -196,6 +203,46 @@ if (!IS_HOST && ROOM_CODE) {
     glass.addEventListener("dblclick", (e) => {
       e.stopPropagation();
       toggleFullscreen();
+    });
+
+    // ── TOMBOL SUBTITLE (CC) KHUSUS PENONTON (GUEST) ──
+    const ccBtn = document.createElement("button");
+    ccBtn.innerHTML = "CC";
+    ccBtn.title = "Nyalakan/Matikan Subtitle";
+    ccBtn.style.position = "absolute";
+    ccBtn.style.bottom = "15px";
+    ccBtn.style.right = "70px"; // Diposisikan di sebelah kiri tombol fullscreen
+    ccBtn.style.zIndex = "15";
+    ccBtn.style.background = "#ff0043"; // Menyala secara default
+    ccBtn.style.color = "white";
+    ccBtn.style.border = "none";
+    ccBtn.style.borderRadius = "6px";
+    ccBtn.style.padding = "8px 12px";
+    ccBtn.style.fontSize = "16px";
+    ccBtn.style.fontWeight = "bold";
+    ccBtn.style.cursor = "pointer";
+    ccBtn.style.boxShadow = "0 4px 10px rgba(0,0,0,0.5)";
+    ccBtn.style.transition = "transform 0.3s";
+    wrapper.appendChild(ccBtn);
+
+    ccBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (video.textTracks && video.textTracks.length > 0) {
+        let track = video.textTracks[0];
+        if (track.mode === "showing") {
+          track.mode = "hidden"; // Mematikan subtitle
+          ccBtn.style.background = "rgba(0,0,0,0.6)";
+          ccBtn.style.color = "gray";
+          showToast("Subtitle Dimatikan");
+        } else {
+          track.mode = "showing"; // Menyalakan subtitle
+          ccBtn.style.background = "#ff0043";
+          ccBtn.style.color = "white";
+          showToast("Subtitle Dinyalakan");
+        }
+      } else {
+        showToast("Tidak ada subtitle pada film ini.");
+      }
     });
   }
 
@@ -265,27 +312,24 @@ function loadVideoPlayer(film) {
   if (!film.hls_path)
     streamUrl = `/media/hls/${film.id || film.film_id}/index.m3u8`;
 
-  // === PERBAIKAN: JANGAN PAKSA SUBTITLE JIKA BISA BIKIN HANG ===
-  // === PERBAIKAN: MEMUAT SUBTITLE DENGAN IZIN KEAMANAN BROWSER ===
+  // === PERBAIKAN: MEMAKSA BROWSER MEMUNCULKAN SUBTITLE UNTUK PENONTON ===
   if (film.has_subtitle) {
     let subtitleUrl = streamUrl.replace("index.m3u8", "subtitle.vtt");
-
-    // KUNCI 1: Memberikan izin agar Browser tidak memblokir file VTT dari Nginx
     video.crossOrigin = "anonymous";
-
     const track = document.createElement("track");
     track.kind = "subtitles";
     track.label = "Indonesia";
     track.srclang = "id";
     track.src = subtitleUrl;
-
-    // KUNCI 2: Karena file VTT manual sudah pasti ada, kita paksa nyala otomatis lagi!
     track.default = true;
-
     video.appendChild(track);
+
+    // Skrip pemaksa (Override) agar track disetel "showing" walaupun panel kontrol hilang
+    track.addEventListener("load", function () {
+      this.track.mode = "showing";
+    });
   }
 
-  // === PERBAIKAN: TAMBAHKAN PELACAK ERROR HLS ===
   if (Hls.isSupported()) {
     const hls = new Hls();
     hls.loadSource(streamUrl);
@@ -312,6 +356,7 @@ function loadVideoPlayer(film) {
   }
 }
 
+// ── LOGIKA JALUR ──
 // ── LOGIKA JALUR ──
 if (ROOM_CODE) {
   fetch(`/api/rooms/${ROOM_CODE}`)

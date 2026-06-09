@@ -19,7 +19,7 @@ def create_app():
     media_dir = os.path.join(base_dir, 'media', 'hls')
 
     app = Flask(__name__, static_folder=frontend, static_url_path='')
-    app.config['SECRET_KEY'] = 'cinestream-dev-secret-2025'
+    app.config['SECRET_KEY'] = 'movia-dev-secret-2025'
 
     with app.app_context():
         init_db()

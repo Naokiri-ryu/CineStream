@@ -96,7 +96,7 @@ function renderDetail(film) {
 
   // Breadcrumb
   document.getElementById("breadcrumb-title").textContent = film.title;
-  document.title = `${film.title} - CineStream`;
+  document.title = `${film.title} - Movia`;
 
   // Info teks
   document.getElementById("detail-title").textContent = film.title;

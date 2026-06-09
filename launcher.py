@@ -1,5 +1,5 @@
 """
-CineStream Infrastructure Manager — Professional Dashboard
+Movia  Infrastructure Manager — Professional Dashboard
 Inspired by Grafana monitoring dashboards.
 """
 # ── Imports ──────────────────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ QPushButton {{ background: {PANEL}; border: 1px solid {BORDER2};
                font-weight: 600; color: {TEXT}; }}
 QPushButton:hover {{ background: {DIM}; border-color: {MUTED}; }}
 QPushButton[role="accent"] {{ background: {ACCENT}; color: white; border: none; }}
-QPushButton[role="accent"]:hover {{ background: #c80812; }}
+QPushButton[role="accent"]:hover {{ background: #c808122; }}
 QPushButton[role="ghost"] {{ background: transparent; border: 1px solid {BORDER};
                               color: {MUTED}; padding: 6px 12px; font-size: 12px; }}
 QPushButton[role="ghost"]:hover {{ border-color: {TEXT}; color: {TEXT}; }}
@@ -277,7 +277,7 @@ class FFmpegWorker(QThread):
             output_m3u8 = os.path.join(self.output_dir, 'index.m3u8')
             output_vtt = os.path.join(self.output_dir, 'subtitle.vtt')
             
-            # TAHAP 1: KONVERSI VIDEO & AUDIO SAJA (Menjamin kelancaran video)
+            # TAHAP 1: KONVERSI VIDEO & AUDIO SAJA (Aman dan Dijamin 100% Jalan)
             cmd_video = [
                 'ffmpeg', '-y', '-i', os.path.normpath(self.input_file),
                 '-map', '0:v:0', '-map', '0:a:0',
@@ -289,10 +289,11 @@ class FFmpegWorker(QThread):
             ]
             flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
             
+            # --- BAGIAN YANG DIPERBAIKI (Tambahkan encoding dan errors) ---
             self.process = subprocess.Popen(
                 cmd_video, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                universal_newlines=True, creationflags=flags)
-                
+                universal_newlines=True, encoding='utf-8', errors='ignore', creationflags=flags)
+            # --------------------------------------------------------------
             while True:
                 if self._cancelled: break
                 line = self.process.stdout.readline()
@@ -715,10 +716,10 @@ class EditFilmDialog(QDialog):
 
 # ── Main Dashboard ────────────────────────────────────────────────────────────
 
-class CineStreamDashboard(QMainWindow):
+class MoviaDashboard(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('CineStream Infrastructure Manager')
+        self.setWindowTitle('Movia  Infrastructure Manager')
         self.resize(1200, 780)
         self.setMinimumSize(900, 600)
         self.setStyleSheet(QSS)
@@ -751,7 +752,7 @@ class CineStreamDashboard(QMainWindow):
         hdr.setStyleSheet(f'background: {PANEL}; border: 1px solid {BORDER}; border-radius: 8px;')
         hl = QHBoxLayout(hdr); hl.setContentsMargins(16, 10, 16, 10)
         dot = QLabel('●'); dot.setStyleSheet(f'color: {GREEN}; font-size: 14px;')
-        name = QLabel('CineStream Server'); name.setStyleSheet('color: white; font-size: 15px; font-weight: 700;')
+        name = QLabel('Movia  Server'); name.setStyleSheet('color: white; font-size: 15px; font-weight: 700;')
         badge = QLabel('Running'); badge.setStyleSheet(f'color: {GREEN}; font-size: 11px; font-weight: 600; background: rgba(63,185,80,0.12); border: 1px solid {GREEN}; border-radius: 20px; padding: 2px 10px;')
         hl.addWidget(dot); hl.addWidget(name); hl.addWidget(badge); hl.addStretch()
 
@@ -994,7 +995,7 @@ class CineStreamDashboard(QMainWindow):
         QMessageBox.information(self, 'Tersalin!', f'URL jaringan disalin ke clipboard:\n\n{url}')
 
     def _shutdown(self):
-        reply = QMessageBox.question(self, 'Matikan Server', 'Matikan semua layanan CineStream?\n\nSemua pengguna yang sedang menonton akan terputus.', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        reply = QMessageBox.question(self, 'Matikan Server', 'Matikan semua layanan Movia ?\n\nSemua pengguna yang sedang menonton akan terputus.', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes: self._timer.stop(); QApplication.quit(); os._exit(0)
 
 def show_toast_msg(parent, text):
@@ -1010,7 +1011,7 @@ def main():
     app = QApplication(sys.argv); app.setStyle('Fusion')
     threading.Thread(target=_run_flask, daemon=True, name='Flask').start()
     _push_log(f'Flask server dimulai di port {FLASK_PORT}.', 'success')
-    dashboard = CineStreamDashboard(); dashboard.show()
+    dashboard = MoviaDashboard(); dashboard.show()
     sys.exit(app.exec())
 
 if __name__ == '__main__':
